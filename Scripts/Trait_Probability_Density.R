@@ -285,8 +285,22 @@ registerDoSEQ()
 hist(Overlap_data$TPD_Overlap)
 
 
-write_rds(file = "Functional_Intactness_Index/Outputs/Trait_Prob_den.rds", Overlap_data)
+hyper_data <- readRDS("Outputs/Functional_Overlap_data.rds")
+Similarity_data <- readRDS("Outputs/similarity_data.rds")
 
-table(Overlap_data$Contrast)
 
-##### so a trait density which works is trait ranges = 0.1 and n_divisions =- 61 thank you!
+#### Join the overlap caluclated using trait probability density methods 
+
+hyper_data$Comparison <- paste(hyper_data$site1,hyper_data$site2,sep = "-")
+Overlap_data$Comparison <- paste(Overlap_data$site1,Overlap_data$site2,sep = "-")
+
+TPD_data <- hyper_data %>% left_join(Overlap_data[,c("Comparison","TPD_Overlap")], by = "Comparison") %>% filter(!is.na(TPD_Overlap))
+
+
+
+
+
+write_rds(file = "Outputs/Trait_Prob_den.rds", TPD_data)
+
+
+

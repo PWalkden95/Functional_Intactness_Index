@@ -9,17 +9,9 @@ require(ggResidpanel)
 
 #### Load in Similarity data
 
-Overlap_data <- readRDS("Functional_Intactness_Index/Outputs/Functional_Overlap_data.rds")
+
 Similarity_data <- readRDS("Functional_Intactness_Index/Outputs/similarity_data.rds")
-TPD_Overlap <- readRDS("Functional_Intactness_Index/Outputs/Trait_Prob_den.rds")
-
-#### Join the overlap caluclated using trait probability density methods 
-
-Overlap_data$Comparison <- paste(Overlap_data$site1,Overlap_data$site2,sep = "-")
-TPD_Overlap$Comparison <- paste(TPD_Overlap$site1,TPD_Overlap$site2,sep = "-")
-
-TPD_data <- Overlap_data %>% left_join(TPD_Overlap[,c("Comparison","TPD_Overlap")], by = "Comparison") %>% filter(!is.na(TPD_Overlap))
-
+TPD_data <- readRDS("Functional_Intactness_Index/Outputs/Trait_Prob_den.rds")
 
 
 ### Want to work out human population density at 

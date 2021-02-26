@@ -3,8 +3,8 @@ title: "Practise_FII_Modelling"
 author: "Patrick Alexander Walkden"
 date: "25/02/2021"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -43,7 +43,7 @@ require(car)
 
 Load in the datasets from the previously calculated metrics.
 
-```{r data loading , echo=FALSE, message=FALSE, warning=FALSE}
+```{r data loading, message=FALSE, warning=FALSE}
 ## Load in the datasets
 
 PREDICTS_site <- readRDS("../Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
@@ -139,11 +139,11 @@ PREDICTS_site$RD1k <- scale(PREDICTS_site$density_1km^(1/2))
 PREDICTS_site$RD50k <- scale(PREDICTS_site$density_50km^(1/2))
 
 
-source("https://highstat.com/Books/Book2/HighstatLibV10.R")
-corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k" ,"UN_subregion")])
+#source("https://highstat.com/Books/Book2/HighstatLibV10.R")
+#corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k" ,"UN_subregion")])
 
 ### a lot of colinearity try removing UN-subregion
-corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k")])
+#corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k")])
 
 ## removing UN_subregion has reduced the colinearity to acceptable levels 
 ```
@@ -151,7 +151,7 @@ corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k")])
 
 Finally I calculate the pairwise phylogenetic similarity between sites, as mentioned before I will be using 1-unifrac.
 
-``` {r phylogenetic similarity, eval = FALSE, results='hide', message=FALSE, warning=FALSE}
+``` {r phylogenetic similarity, results='hide', message=FALSE, warning=FALSE}
 #### Load in Phylogeny - just tae the first one when running the inital models 
 
 
@@ -213,12 +213,12 @@ create_vcv <- function(data, level) {
 }
 
 
-site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
+#site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
   
-  write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
+  #write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
 ```
 
-##Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
+## Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
 
 ```{r}
 ########################################################################################################################
@@ -355,7 +355,7 @@ Therefore, that does not indicate to me at the moment that I need to account for
 With that we now have everything ready to begin modeling. Random effects that I will be including in the models will be study, to account for between study differences in location, method and sampling effort and study block, to account for spatial configuration of sites. Additionally, I will be testing for random slopes for each of the predictor variables within study by identifying which random effect structure has the lowest DIC in the maximal model.
 
 
-```{r PGLMM modeling, eval=FALSE, message=FALSE, warning=FALSE}
+```{r PGLMM modeling, message=FALSE, warning=FALSE}
 ####################################
 # With this we can proceed with modelling using GLMMs as opposed to PGLMMs 
 ###################################
@@ -369,7 +369,7 @@ Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_1b)
+
 
 #### lets see what random effect structure gives the best AIC 
 
@@ -380,7 +380,6 @@ Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
 
-summary(Rao_Model_2b)
 
 #2) logHPD within study 
 
@@ -390,7 +389,6 @@ Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
 
-summary(Rao_Model_3b)
 
 #3) Road Density_1km within study  
 
@@ -399,7 +397,6 @@ Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site, bayes = TRUE)
 
-summary(Rao_Model_4b)
 
 # 4) RD50km within study 
 
@@ -408,20 +405,19 @@ Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
-summary(Rao_Model_5b)
-
-
 
 
 Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 = Rao_Model_3b$DIC,
                          mod4 = Rao_Model_4b$DIC, mod5 = Rao_Model_5b$DIC)
+
+Random_DIC
 ```
 
 The model with the lowest DIC is with no random slope therefore model 1 will be carried forward. 
 
 Next to identify the optimal fixed effect structure I removed both interactions in turn to see whether that reduced the DIC of the model. Typically a reduction >2 will provide support for the simplified model. 
 
-```{r fixed effect structure, eval = FALSE}
+```{r fixed effect structure}
 
 #### Remove each interaction to see if thsis improves the model at all. 
 
@@ -432,7 +428,6 @@ Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_6b)
 
 #LUI:RD1k
 
@@ -441,8 +436,6 @@ Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_7b)
-
 # LUI:logHPD
 
 Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
@@ -450,7 +443,7 @@ Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_8b)
+
 
 Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
                                 RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
@@ -465,7 +458,7 @@ Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_9b)
+
 
 # LUI:RD50k
 
@@ -474,7 +467,6 @@ Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k 
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_10b)
 
 # LUI:logHPD
 
@@ -483,14 +475,14 @@ Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k 
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_11b)
+
 
 
 Model_differences <- data.frame(RD1k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
                                 RD50k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
                                 logHPD = Rao_Model_11b$DIC - Rao_Model_7b$DIC)   
 
-
+Model_differences
 #### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 10b is best 
 
 ## RD50k fixed
@@ -500,7 +492,6 @@ Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_12b)
 
 ### RD1k fixed
 
@@ -509,7 +500,6 @@ Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_13b)
 
 #### LUI:logHPD
 
@@ -518,12 +508,12 @@ Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k 
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_14b)
 
 Model_differences <- data.frame(RD50k = Rao_Model_12b$DIC - Rao_Model_10b$DIC,
                                 RD1k = Rao_Model_13b$DIC - Rao_Model_10b$DIC,
                                 logHPD = Rao_Model_14b$DIC - Rao_Model_10b$DIC)   
 
+Model_differences
 #### Model DIC is reduced wehn removing the interaction between LUI:logHPD and is increased in the other cases so model 14 is carried forward.
 
 #### RD50k
@@ -533,8 +523,6 @@ Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_15b)
-
 
 #### RD1k
 
@@ -542,7 +530,6 @@ Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_16b)
 
 ### logHPD
 
@@ -551,7 +538,6 @@ Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-summary(Rao_Model_17b)
 
 
 Model_differences <- data.frame(RD50k = Rao_Model_15b$DIC - Rao_Model_14b$DIC,
@@ -561,7 +547,7 @@ Model_differences <- data.frame(RD50k = Rao_Model_15b$DIC - Rao_Model_14b$DIC,
 ####
 
 
-
+Model_differences
 
 ```
 
@@ -621,20 +607,20 @@ write_rds(file = "Outputs/Rao_model.rds", Rao_Model_14b)
 summary(Rao_Model_14b)
 ```
 
-The summary of the final Rao model shows that Functional diversity is predicted to be reduced across LUIs except Primary intense use and Secondary intense use where it is predicted to increase slightly. Significant reductions, as determined by the credible intervals of the parameter distribution not crossing zero, were shown in cropland light and minimal, pasture intense and minimal, secondary light and minimal and urban minimal habitats.   
+The summary of the final Rao model shows that Functional diversity, compared to primary minimal habitat, is reduced across LUIs except Primary intense use and Secondary intense use where it increases slightly. Significant reductions, as determined by the credible intervals of the parameter distribution not crossing zero, were shown in cropland light and minimal, pasture intense and minimal, secondary light and minimal and urban minimal habitats. In response to the other pressures FD increases with greater logHPD and road density at 1km radius, while FD decreases with Road density at 50km.    
 
+Running the model selection framework with the "biased" Rao yielded similar results however, the best model also included a random slope of LUI within study which resulted in FD swapping from observed declines in Primary light use, and urban light use to positive affecting functional diversity. 
 
+# **1.2 Modelling: Functional Similarity/Overlap (GLMM)**
 
-## 1.2 Modelling: Functional Similarity/Overlap (GLMM)
-
-To assess the impact of landuse change and other pressures on functional similarity I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
+To assess the impact of landuse change and other pressures on functional similarity, caluclated using trait probability density hypervolumes in trait space I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
 
 To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. To determine the best fixed effect structure is more difficult however, as the comparisons are not-independent of each other as a single primary minimal site will being compared to multiple of other sites, therefore traditional likelihood ratio tests will not best suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model.
 
 
-```{r load in data, eval=FALSE}
-Overlap_data <- readRDS("Functional_Intactness_Index/Functional_Overlap_data.rds")
-Similarity_data <- readRDS("Functional_Intactness_Index/similarity_data.rds")
+```{r load in data, eval=FALSE, echo=FALSE}
+TPD_data <- readRDS("Outputs/Trait_Prob_den.rds")
+Similarity_data <- readRDS("Outputs/similarity_data.rds")
 
 
 ### Also want to add in a variable for the minimum number of species in either of the sites used to construct the hypervolumes. This will be used as weights in the models as there may be greater uncertainty in the hypervolume overlaps when fewer species have been recorded at either site.
@@ -642,57 +628,71 @@ Similarity_data <- readRDS("Functional_Intactness_Index/similarity_data.rds")
 
 
 ## lets have a look at the other variables and what transformations will be best 
-
-hist(car::logit(Overlap_data$hyper_overlap, adjust = 0.001, percents = FALSE))
+hist(TPD_data$TPD_Overlap)
+hist(car::logit(TPD_data$TPD_Overlap, adjust = 0.001, percents = FALSE))
 
 
 ## because the similarity metric is bound between 0 and 1 and i performed a logit transformation as well as taking the log of the geographic distance and applying other transformations to the variables
 
-Overlap_data <- Overlap_data %>% dplyr::mutate(logitOver = car::logit(hyper_overlap, adjust = 0.001, percents = FALSE)) %>%
+### Want to work out human population density at 
+
+
+TPD_data <- TPD_data %>% dplyr::mutate(logitOver = car::logit(TPD_Overlap, adjust = 0.001, percents = FALSE)) %>%
   dplyr::mutate(logdist = log(distance + 1),
                 rt3env = env_distance^(1/3),
                 sqrtS2RD1K = S2RD1K^(1/2),
-                sqrtS2RD50K = S2RD50K^(1/2))
+                sqrtS2RD50K = S2RD50K^(1/2),
+                RD1Kdiff = sqrtS2RD1K - (S1RD1K^(1/2)),
+                RD50Kdiff = sqrtS2RD50K - (S1RD50K^(1/2)))
 
 
 
-table(Overlap_data$Contrast)
+
+table(TPD_data$Contrast)
 
 
 
-Overlap_data$Contrast <- ifelse(grepl(Overlap_data$Contrast, pattern = "Plantation forest"), 
-                                   "Primary_Minimal use-Secondary Vegetation_Light use",
-                                   paste(Overlap_data$Contrast))
+TPD_data <- TPD_data %>% dplyr::mutate(Cont = ifelse(grepl(Contrast, pattern = "Plantation forest"), 
+                                "PriMin-SecLig",
+                                paste(Contrast)),
+                                Cont = ifelse(grepl(Cont, pattern = "Primary_Light")|grepl(Cont, pattern = "Primary_Intense"),
+                                "PriMin-Primary",
+                                paste(Cont)),
+                                Cont = ifelse(grepl(Cont, pattern = "Cropland"),
+                                              "PriMin-Cropland", 
+                                              paste(Cont)),
+                              Cont = ifelse(grepl(Cont, pattern = "Secondary Vegetation_Light use"),
+                                            "PriMin-SecLig", 
+                                            paste(Cont)),
+                              Cont  = relevel(factor(Cont), ref = "Primary_Minimal use-Primary_Minimal use"))
 
-table(Overlap_data$Contrast)
 
+levels(TPD_data$Cont) <- c("PriMin-PriMin","PriMin-SecMin", "PriMin-UrbMin","PriMin-Cropland", "PriMin-Primary","PriMin-SecLig")
 
-Overlap_data$Contrast <- relevel(factor(Overlap_data$Contrast), ref = "Primary_Minimal use-Primary_Minimal use")
+table(TPD_data$Cont)
 
-Overlap_data$rt3env <- scale(Overlap_data$rt3env)
-Overlap_data$s2logHPD <- scale(Overlap_data$S2logHPD)
-Overlap_data$logHPDdiff <- scale(Overlap_data$logHPDdiff)
-Overlap_data$logdist <- scale(Overlap_data$logdist)
-Overlap_data$sqrtS2RD1K <- scale(Overlap_data$sqrtS2RD1K)
-Overlap_data$sqrtS2RD50K <- scale(Overlap_data$sqrtS2RD50K)
-Overlap_data$RD1Kdiff <- scale(Overlap_data$RD1Kdiff)
-Overlap_data$RD50Kdiff <- scale(Overlap_data$RD50Kdiff)
+TPD_data$rt3env <- scale(TPD_data$rt3env)
+TPD_data$s2logHPD <- scale(TPD_data$S2logHPD)
+TPD_data$logHPDdiff <- scale(TPD_data$logHPDdiff)
+TPD_data$logdist <- scale(TPD_data$logdist)
+TPD_data$sqrtS2RD1K <- scale(TPD_data$sqrtS2RD1K)
+TPD_data$sqrtS2RD50K <- scale(TPD_data$sqrtS2RD50K)
+TPD_data$RD1Kdiff <- scale(TPD_data$RD1Kdiff)
+TPD_data$RD50Kdiff <- scale(TPD_data$RD50Kdiff)
 
 
 source("https://highstat.com/Books/Book2/HighstatLibV10.R")
 
-corvif(Overlap_data[,c("Contrast", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
+corvif(TPD_data[,c("Cont", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
 
-### some colinearity problems lets drop site2HPD
+### some colinearity problems lets drop sqrtS2RD50k
 
-corvif(Overlap_data[,c("Contrast", "logdist", "rt3env", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
+corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2RD1K", "RD1Kdiff", "RD50Kdiff")])
 
 
-write_rds(file = "Functional_Intactness_Index/Overlap_modelling_data.rds", Overlap_data)
-## that improve colinearity to acceptable levels  so we can move onto modeling 
 ```
 
-```{r Overlap Modeling, eval = FALSE}
+```{r Overlap Modeling, eval = FALSE , echo=FALSE}
 
 ################################
 ##### Modelling ################
@@ -819,7 +819,7 @@ MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3
 Model 1 seems to have the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
 
 
-```{r permuted data, eval = FALSE}
+```{r permuted data, eval = FALSE , echo=FALSE}
 
 Permuted_data <- rep(list(NA),1000)
 
@@ -1205,7 +1205,7 @@ Finally testing the removal of all other fixed effects and interactions in the m
 Looking more closely at the model output we can see that the similarity of communities compared to that of primary minimally used sites 
 
 
-``` {r final Overlap Model}
+``` {r final Overlap Model , echo=FALSE, eval = FALSE}
 Overlap_data <- readRDS("Functional_Intactness_Index/Overlap_modelling_data.rds")
 
 Model_16 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
