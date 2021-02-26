@@ -1,0 +1,769 @@
+---
+title: "Practise Funtioncal Intactness Index"
+author: "Patrick Alexander Walkden"
+date: "16/01/2021"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### The functional intactness index rationale
+
+This R markdown is going to go through the steps to calculate a measure of functional intactness using the PREDICTS database and the global bird database, which contain data on the composition of ecological communities across land use types, and on morphological traits and dietary and foraging strategies, respectively. The methodology is an extension of the Biodiversity intactness index (BII) workflow that combines two separate models of abundance and compositional similarity to derive a measure of intactness of a community compared to pristine habitat (Primary minimally used habitat in PREDICTS).
+
+To measure functional intactness, first I will calculate a site level metric of functional diversity, Rao's Quadratic entropy. Rao's Q is an abundance weighted measure of functional diversity and is the sum of pairwise functional distances between species within a community. Abundance data is obtained from the PREDICTS database while functional traits are derived from 8 morphometric traits through a two step-PCA resulting in axes fo variation explaining differences in body size, locomotion and forging.   
+
+Second, I will calculate a measure of functional similarity as the overlap (Based on Jaccard's similarity index) of hypervolumes in multidimensional trait space. To capture the effects of land-use compared to pristine habitat, the contrasts will be between sites of primary minimally used habitat and all other land use types. This is not a true measure of functional beta-diversity as it does not include the difference in function due to turnover. 
+
+As sites that contain a similar assemblage of species may respond similarly to land use change they cannot be considered as independent, therefore I used phylogenetic generalized linear mixed effects models (more on this later), taking functional diversity as a function of land-use type and intensity as well as other pressures including. Other pressures considered are human population density, road density and UN_subregion.
+
+Generalised linear mixed effects models will be used to model functional similarity as a function of the contrast between sites and related pressures.
+
+The output of these models (hopefully), a measure of functional diversity and a measure of the proportion of function retained in impacted sites compared to a "pristine" baseline, once multiplied together will be the proportion of original function retained.  
+
+### Load in the necessary packages 
+
+``` {r Package Loading, results='hide', message=FALSE, warning=FALSE}
+rm(list = ls())
+require(tidyverse) ## For data manipulation
+require(magrittr) ## for piping
+require(SYNCSA) ## For calculating functional diversity metric
+require(vegan) ## for performing ordination (PCA/PCoA)
+require(gower) ## calculating gower distances
+require(raster) ## for loading in rasters of environmental variables and roads
+require(geosphere) ## calculating geographic distances
+require(ade4)  ### i can't remember right now
+require(FD) ## calculating functional diversity metrics
+require(hypervolume) ## calculating functional similarity/ diversity metrics 
+require(betapart) ## for calculating functional similarity and for decomposing functional diversity into turnover and nestedness components 
+require(foreach)## for parallelising loops
+require(doParallel) ## ditto
+require(sf)   ### for calculate density of roads
+require(rgeos) ## ditto 
+require(lwgeom) ### ditto
+```
+
+
+
+## 1.1 Preparing the data: Biodiversity data (PREDICTS)
+
+The first stage is going to be loading in the data and preparing it for use in deriving the metrics of functional diversity and similarity.  
+
+My focal group will be birds as they are ecologically diverse and have comprehensive and highly resolved species-level data on functional traits and phylogeny available. The global bird database contains information on 9 morphological traits including dimensions on wing, beak and tarsus, and foraging and dietary information on the proportion of species diet obtained from certain sources including fruit, nectar, insects and vertebrates etc.
+
+
+```{r Datasets, include=TRUE}
+
+### Load in the PREDICTS database
+
+PREDICTS <- readRDS("../Datasets/PREDICTS/diversity-2020-10-19-02-32-34.rds")
+
+### Foraging data
+Forage <- readRDS("../Datasets/GBD/Trophic_Foraging_Niche.rds")
+
+### Jetz_traits 
+Jetz_Traits <- read.csv("../Datasets/GBD/GBD_Jetz_averages_11_Nov_2020.csv")
+colnames(Jetz_Traits)[1] <- "Jetz_Name" 
+
+### Taxonomy cross-walk as not all species in PREDICTS are in the form of the Jetz tree which is the basis of the trait database (Will be changing to Birdlife)
+PREDICTS_Taxonomy <- readRDS("../Datasets/PREDICTS/PREDICTS_AVES_Updated_Taxonomy.rds")
+
+```
+
+
+Subset the database to just the birds and while we are practising the workflow I will be looking at records from the Americas. 
+Combine the datasets.
+
+
+```{r Combine, include=TRUE}
+PREDICTS_Aves_Am <- PREDICTS %>% filter(Rank == "Species", Class == "Aves") %>% left_join(PREDICTS_Taxonomy[,c("Taxon", "Jetz_Name")], by = "Taxon") %>%
+  left_join(Forage[,c(34:46)], by = c("Jetz_Name" = "Taxon")) %>%
+  left_join(Jetz_Traits[,c(1,8:18)], by = "Jetz_Name") %>%
+  filter(UN_region == "Americas")
+```
+
+
+Lets take a look what land-use types and intensities the sites that bird communities were sampled in.
+
+```{r table, include=TRUE}
+table( PREDICTS_Aves_Am$Predominant_habitat, PREDICTS_Aves_Am$Use_intensity)
+```
+
+
+So looking at this it would be good to collapse both primary and secondary land-use types each into a single land-use category of primary and secondary vegetation, respectively, Additionally, we are going to remove the sites that could not be classified a land-use type or intensity as it's the effects of these on biodiversity that we are interested in.
+
+
+``` {r collapsing data, include=TRUE}
+PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>% dplyr::mutate(LandUse = ifelse(grepl(pattern = "secondary", tolower(Predominant_habitat)), "Secondary Vegetation", paste(Predominant_habitat)),
+                                                       LandUse = ifelse(grepl(LandUse, pattern = "Primary"), "Primary", paste(LandUse)),
+                                                       
+                                                       LandUse = ifelse(LandUse == "Cannot decide", NA, paste(LandUse)),
+                                                       
+                                                       Intensity = ifelse(Use_intensity == "Cannot decide", NA, paste(Use_intensity)),
+                                                       
+                                                       LandUse_Intensity = ifelse(is.na(Use_intensity), NA, paste(LandUse, Intensity, sep = "_")),
+                                                       LandUse_Intensity = ifelse(grepl("NA", LandUse_Intensity), NA, paste(LandUse_Intensity)),
+                                                       
+                                                       LandUse_Intensity = factor(LandUse_Intensity),
+                                                       
+                                                       LandUse_Intensity = relevel(LandUse_Intensity, "Primary_Minimal use")) %>%
+  dplyr::filter(!is.na(LandUse_Intensity)) %>%
+  
+  droplevels()
+
+table( PREDICTS_Aves_Am$LandUse, PREDICTS_Aves_Am$Intensity)
+
+```
+
+
+Lets visualize where the sites are geographically.
+
+```{r site visulaisation, include=TRUE}
+
+## Load in world map
+
+wm<-map_data("world") %>% filter(region != "Antartica" ) %>% fortify()
+
+## site coords
+
+site_points <- PREDICTS_Aves_Am %>% distinct(SSBS,Longitude,Latitude)
+
+# generate and plot map
+
+site_plot<-ggplot()+ coord_fixed()+
+  geom_map(data =wm, map = wm,
+           aes(group = group, map_id= region),
+           fill = "darkgrey")+
+  geom_point(data = fortify(site_points), aes(Longitude, Latitude),
+             colour = "blue", size = 1)+
+  theme_classic()
+
+plot(site_plot)
+
+
+```
+
+
+Because the PREDICTS database is a collation of different studies that often differ in the way data is collected, what is recorded and the sampling effort expended we need to correct for this assuming that the biodiversity metric recorded increases linearly with effort. Additionally, for the diversity metrics that we are going to be calculating records of abundance and occurrence are useful therefore studies that record the species richness of sites are dropped 
+
+``` {r sampling effort correction, include = TRUE}
+
+PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>% 
+  
+  
+  dplyr::group_by(SS) %>% ## group by study 
+  
+  dplyr::mutate(Max_Sampling_Effort = max(Sampling_effort)) %>%  # max samplin effort in each site
+  
+  dplyr::ungroup() %>%
+  
+  dplyr::mutate(Rescaled_Sampling_Effort = Sampling_effort/Max_Sampling_Effort) %>%  ## rescale sampling effort so that the maximum effort with a study is 1
+  
+  dplyr::filter(Diversity_metric_type =="Abundance" | Diversity_metric_type ==  "Occurrence") %>%
+  
+  dplyr::mutate(Effort_Corrected_Measurement = ifelse(Diversity_metric_is_effort_sensitive == TRUE,
+                                                      Measurement/Rescaled_Sampling_Effort,
+                                                      Measurement)) %>%
+  
+  droplevels()
+
+  ## Now the Biodiversity data is ready to be used 
+  
+  write_rds(PREDICTS_Aves_Am, "Functional_Intactness_Index/PREDICTS_Americas_Aves.rds")
+  
+```
+
+# 1.2 Preparing the data: Traits (GBD)
+
+In addition to biodiversity data to calculate measures of functional diversity information on species functional traits is required. Functional traits are what determines a species functional role in an ecosystem and are informative on the species niche. Functional traits can take a variety of forms such as quantitative traits such as body size, wing length, migratory distance, or qualitative such as foraging strategy, reproductive strategy etc.
+
+In this analysis I will be using measurements of 8 morphometric traits in birds including beak dimensions, wing shape, and tarsus and tail length. To reduce dimensionality, produce major axes of variation and account for the positive association between all traits and body size I will be performing a two-step PCA approach proposed by [Trisos et al. 2014](https://www.journals.uchicago.edu/doi/full/10.1086/678233). To derive independent axes of variation I first partitioned the traits into those related to locomotion (Tarsus, tail, wing) and those related to foraging (beak dimensions) and perform a PCA on each. The first principal component of each will represent the difference in body size and a further PCA on these two axes will produce a single body size axis. The second principal component of each PCA will also be retained to represent meaningful axes of variation in locomotion and foraging strategies.
+
+```{r traits, include=TRUE}
+
+PCA_Data <- data.frame(PREDICTS_Aves_Am[,c("Jetz_Name", "Bill.TotalCulmen", "Bill.Nares", "Bill.Width", "Bill.Depth", "Tarsus.Length",    "Kipp.s.Distance", "Secondary1", "Wing.Chord", "Hand.Wing.Index", "Tail.Length", "Mass")])
+
+PCA_Data <- distinct(PCA_Data, Jetz_Name, .keep_all = TRUE)
+ 
+
+#### Log transform - then standardise and centre for a mean of zero and a standard deviation of 1
+
+PCA_Data <- data.frame(Jetz_Name = PCA_Data[,1], scale(log(PCA_Data[c(2:12)])))
+
+### Perform a PCA on all the traits - This is just used to compare the utility of the Two-step PCA as opposed to just a single full PCA
+
+Full.pca.data <- PCA_Data[,c(2:6,8:9,11)]
+
+Full.pca <- prcomp(Full.pca.data, center = TRUE, scale. = TRUE)
+
+summary(Full.pca)
+Full.pca
+
+
+### PCA on the Foraging traits - Beak Dimensions
+
+For.pca.data <- PCA_Data[,c(2:5)]
+
+For.pca <- prcomp(For.pca.data, center = TRUE, scale. = TRUE)
+For.pca
+summary(For.pca)
+
+### PCA on the Locomotory traits - Tarsus, tail and wing dimensions
+
+Loco.pca.data <- PCA_Data[,c(6,8,9,11)]
+
+Loco.pca <- prcomp(Loco.pca.data, center = TRUE, scale. = TRUE)
+Loco.pca
+summary(Loco.pca)
+
+
+#### Final PCA on the first Principal component of each of the first PCAs to derive an axis of body size 
+
+Body.pca.data <- data.frame(LocoPC1 = Loco.pca$x[,1], ForPC1 = For.pca$x[,1])
+Body.pca <- prcomp(Body.pca.data, center = TRUE, scale. = TRUE)
+
+Body.pca
+summary(Body.pca)
+
+
+
+### Match the independent axes of trait variation to species in PREDICTS 
+
+PC_Scores <- data.frame(Jetz_Name = PCA_Data[,1], Foraging.PCA = For.pca$x[,2], Loco.PCA = Loco.pca$x[,2], Body.PCA = Body.pca$x[,1])
+
+
+### standardize the PC scores so that the maximum value is 1
+
+for(col in colnames(PC_Scores[,-1])){
+  PC_Scores[,col] <- PC_Scores[,col]/max(PC_Scores[,col])
+}
+
+
+write_rds(file = "Functional_Intactness_Index/PC_Scores.rds", PC_Scores)
+```
+
+
+# 2.1 Calculation of functional metrics: Functional Diversity (Rao's Quadratic Entropy)
+
+The measure of functional diversity I am going to be using is Rao's Quadratic entropy (Rao's Q). Rao's Q is calculated as the sum of pairwise functional distances between species within a assembalage, weighted by each species abundance. Rao's Q had been widely used in the literature and has advantages by being able to account for species relative abundance, a limitation of a number of other measures of functional diversity. There are a number of ways to calculate functional distances between species within a community but I will be considering two common methods. I will be calculating each measure of Rao in the **FD** and **SYNCSA** packages respectively.
+
+``` {r Raos, include = TRUE, results = 'hide'}
+
+
+#######################################
+#### Functional Diversity of sites ####
+#######################################
+
+abundance_data <- PREDICTS_Aves_Am %>% dplyr::filter(Diversity_metric == "abundance") %>% dplyr::filter(Effort_Corrected_Measurement != 0) %>%
+  
+  ### filter out studies of just a single species 
+  
+  dplyr::group_by(SS) %>% dplyr::mutate(study_n_species = n_distinct(Jetz_Name)) %>% dplyr::filter(study_n_species > 1) %>% ungroup() %>%  
+  
+  #### group by Site and Species get abundance if there are some sites that the same species is recorded multiple times 
+  dplyr::group_by(SSBS,Jetz_Name) %>% dplyr::mutate(SpeciesSiteAbundance = sum(Effort_Corrected_Measurement), n_spp = n()) %>%
+  
+  filter(!duplicated(n_spp) | n_spp == 1) %>%
+  
+  ungroup() %>%   droplevels() %>%  
+  
+  ### group by just site to get Total site abundance
+  group_by(SSBS) %>% dplyr::mutate(TotalSiteAbundance = sum(SpeciesSiteAbundance), site_species = n_distinct(Jetz_Name)) %>%
+  
+  ungroup() %>%
+  
+  ### relative abundance of each species at each site SpeciesSitelevel abundance/TotalSite abundance
+  dplyr::mutate(RelativeAbundance = SpeciesSiteAbundance/TotalSiteAbundance) %>%
+  
+  droplevels()
+
+
+## save the abundance data that will come in use for the modelling
+
+write_rds(abundance_data, file = "Functional_Intactness_Index/abundance_data.rds")
+
+
+#####################################################
+#### Function to calculate Rao's Q for each site ####
+####################################################
+
+#### Rao's Q is based on the sum of pairwise dissimilarities in functional traits between species within a community and there are methods based on gower distances of mean trait values or you can calculate the dissimilarity as the non-overlapping area in multidimensional trait space so lets give it a go 
+data <- abundance_data
+
+Rao_Q_Func <- function(data){
+
+  ### get the list of uncique species across teh whole dataset
+  
+Species_abundance <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
+
+### loop over every site in the dataset to collate the relative abundance of each species
+
+for(site in levels(data$SSBS)){
+
+  Spp_abd <- data %>% filter(SSBS == site) %>% droplevels() %>% data.frame()
+
+
+  ### Join species withining site to dataframe and rename column as site name
+  
+  Species_abundance <- Species_abundance %>% left_join(Spp_abd[,c("Jetz_Name", "RelativeAbundance")], by = "Jetz_Name")
+  colnames(Species_abundance)[which(colnames(Species_abundance) == "RelativeAbundance")] <- paste(site)
+}
+
+## rename rows as species and drop column from dataset 
+
+rownames(Species_abundance) <- Species_abundance$Jetz_Name
+Species_abundance <- as.matrix(Species_abundance[,-1])
+
+## Nas to zeros
+
+Species_abundance[is.na(Species_abundance)] <- 0  
+      
+### Join all species in datasets traits scores
+
+traits <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels() %>% left_join(PC_Scores, by = "Jetz_Name")
+rownames(traits) <- traits$Jetz_Name
+traits <- traits[,-1]
+
+test <- adiv::dsimFun(df = traits, type = "dissimilarity", vartype = "Q", method = 2)
+test_2 <- sqrt(as.matrix(FD::gowdis(traits)))
+
+
+Rao_Gow <- rao.diversity(comm = t(Species_abundance),traits =  traits)    #THIS is using the package SYNCSA that calcuates Rao's using gowdis 
+
+
+Rao_Var <- FD::dbFD(x = traits, a = t(Species_abundance), scale.RaoQ = TRUE) ## dbFD calculates Rao's Q as a measure of variance
+Rao <- data.frame(Var = as.numeric(Rao_Var$RaoQ), Gow = Rao_Gow$FunRao)
+
+
+
+return(Rao)
+}
+
+
+
+PREDICTS_Site_Rao <- data.frame(abundance_data) %>% distinct(SSBS, .keep_all = TRUE)%>% dplyr::select(SS, SSB, SSBS,UN_subregion, LandUse, Use_intensity, LandUse_Intensity, Longitude,Latitude, site_species)
+
+PREDICTS_Site_Rao$SSBS <- as.character(PREDICTS_Site_Rao$SSBS)
+PREDICTS_Site_Rao$Gow_Rao <- NA
+PREDICTS_Site_Rao$Var_Rao <- NA
+
+
+Rao_data <- Rao_Q_Func(abundance_data)
+
+PREDICTS_Site_Rao$Gow_Rao <- Rao_data$Gow
+PREDICTS_Site_Rao$Var_Rao <- Rao_data$Var
+
+hist(PREDICTS_Site_Rao$Gow_Rao)
+hist(PREDICTS_Site_Rao$Var_Rao)
+hist(sqrt(PREDICTS_Site_Rao$Var_Rao))
+plot(PREDICTS_Site_Rao$Gow_Rao ~ PREDICTS_Site_Rao$Var_Rao)
+
+
+#write_rds(PREDICTS_Site_Rao, file = "Functional_Intactness_Index/PREDICTS_Site_Rao.rds")
+```
+We can see that he measures of Rao's Q are related to each other no matter how you calculate it and variance based Rao's being poisitve skewed that a square root or cube root transformation normalizes. 
+
+
+# 2.2 Calculation of functional metric: Function similarity
+
+The second metric I am going to calculate is functional similarity measured as the overlap of hypervolumes in multidimensional trait space. Essentially we want to know how much functional overlap there is between Primary minimal sites and sites of other land-use types and intensities. As previously mentioned the overlap of hypervolumes is not a full measure of beta-diversity as it only considers the proportion of function that is retain between the two sites and not the changes that occur beyond those bounds, which may be substantial. Some additional analyses would look more closely at this change in functional structure as a result of environmental change by partitioning beta-diversity into nestedness (differences due to shrinking of function) and turnover( differences due to replacement), each with different conservation requirements, but I digress. 
+
+Hypervolumes in multidimensional space are defined by the species that occur at each site that their associated trait scores, here in three dimensions relating to the PC axes of body, foraging and locomotion traits. I will construct the hypervolumes using the *hypervolume* package developed by [B. Blonder](http://www.benjaminblonder.org/papers/2014_GEB.pdf), and in two different ways. First I will create a minimum convex hull that incorporates all points, however this has some downfalls as it assumes that all space between points is occupied no matter how disparate they are and can lead to overestimation of hypervolume size and inaccuracies in overlap calculation. Therefore, secondly, I will be using a more restrictive decision based algorithm to construct the hypervolume called a *One-Class Support Vector Machine* which randomly generates points in multidimensional trait space and decides whether it is "in" or "out" of the boundaries of the hypervolume with enough samples the points define the hypervolume in trait space. 
+
+To accurately calculate the hypervolumes and their overlap I have only included sites that have greater that 21 records of species occurrence or abundance.
+
+```{r hypervolume construction,results='hide', error=FALSE, warning=FALSE, cache=TRUE, include=TRUE, eval=FALSE}
+
+#############################################
+#### Functional Similarity between sites ####
+#############################################
+
+
+Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% left_join(PC_Scores, by = "Jetz_Name") %>% filter(Effort_Corrected_Measurement > 0) %>%
+  
+   ### calculating a hypervolume in 3 dimensions with fewer than 21 species on result in inaccurcies 
+  group_by(SSBS) %>% dplyr::mutate(Site_spp = n_distinct(Jetz_Name)) %>% filter(Site_spp > 21) %>% ungroup() %>%
+  
+  ## how many studies have at least one site of primary minimal for comparisons to be made and make sure the sites have more than a single site. 
+  
+  group_by(SS) %>% dplyr::mutate(n_primary_min = sum(LandUse_Intensity == "Primary_Minimal use" ), n_sites_within_studies = n_distinct(SSBS)) %>%
+  
+  
+  ungroup() %>% filter(n_primary_min > 0 ) %>%  filter(n_sites_within_studies > 1) %>%
+  
+  droplevels() %>%
+  
+  data.frame()
+
+write_rds(Similarity_data, file = "Functional_Intactness_Index/similarity_data.rds")
+
+
+
+
+########################################################
+###### Loop to generate functional overlap of sites ####
+########################################################
+
+### With studies with multiple pri-min sites it compares with each other twice -- prim1 v prim2 & prim2 v prim 1 etc etc should only really compare once therefore i have create a function that will remove the duplicated comparisons.
+
+remove_dupl_comparisons <- function(data){
+
+  data$drop <- NA
+  data$comparison <- paste(data$site1,data$site2, sep = "_")
+  data[1,"drop"] <- FALSE
+  
+  
+  
+  for(i in 2:NROW(data)){
+  
+    site1 <- data[i,"site1"]
+    site2 <- data[i,"site2"]
+    
+    match_1 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site1))
+    match_2 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site2))
+    
+    if(any(match_1 %in% match_2)){
+      data[i,"drop"] <- TRUE
+    } else {
+      data[i,"drop"] <- FALSE
+    }
+    
+  }
+    
+  if(any(data$drop)){
+  data <- data[-which(data$drop == TRUE & data$Contrast == "Primary_Minimal use-Primary_Minimal use"),-which(colnames(data) == "comparison" | colnames(data) == "drop")]
+  }
+    
+  
+  return(data)
+}
+
+
+### What studies do we have in the dataset 
+
+studies <- levels(Similarity_data$SS) 
+
+#### empty data frame for results to go into 
+
+
+
+
+
+registerDoParallel(cores = 4)
+
+Overlap_data <- foreach(study = studies,
+                         .combine = "rbind",
+                         .packages = c("hypervolume","betapart","tidyverse","magrittr","geosphere","gower","raster")) %dopar% {
+
+
+  ### data for study 
+Overlap_data <- c()
+
+
+
+  data <- Similarity_data %>% filter(SS == study) %>% droplevels()
+  
+  ### coordinates going to be used to calculate distance between sites
+   
+  LatLong <- data.frame(data) %>% distinct(SSBS,Latitude,Longitude)
+  
+  ### land use and intensity at each site
+  
+  LandUse <- data.frame(data) %>% distinct(SSBS, LandUse_Intensity)
+
+  ### which sites are of primary minimal landuse type and intensity  
+  
+  Primary_sites <- LandUse %>% filter(LandUse_Intensity == "Primary_Minimal use") %>% pull(SSBS) %>% as.character()
+  
+  #### all other sites 
+  
+  all_sites <- LandUse %>% pull(SSBS) %>% as.character()
+
+  
+
+  
+  ###### get the comparisons with the primary minimal site and all other sites within the study 
+  
+  site_comparisons <- expand.grid(Primary_sites, all_sites) %>% 
+    dplyr::rename(site1 = Var1, site2 = Var2) %>% dplyr::mutate(site1 = as.character(site1), site2 = as.character(site2)) %>%
+    filter(site1 != site2) %>%
+    left_join(LatLong, by = c("site1" = "SSBS")) %>% dplyr::rename(site1Lat = Latitude, site1Long = Longitude) %>%
+    left_join(LatLong, by = c("site2" = "SSBS")) %>% dplyr::rename(site2Lat = Latitude, site2Long = Longitude) %>%
+    left_join(LandUse, by = c("site1" = "SSBS")) %>% dplyr::rename(site1LUI = LandUse_Intensity) %>%
+    left_join(LandUse, by = c("site2" = "SSBS")) %>% dplyr::rename(site2LUI = LandUse_Intensity) %>%
+    dplyr::left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site1" = "SSBS")) %>%
+    dplyr::rename(site1_spp = Site_spp) %>%
+    left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site2" = "SSBS")) %>%
+    dplyr::rename(site2_spp = Site_spp) %>%
+    dplyr::mutate(Contrast = paste(site1LUI,site2LUI, sep = "-"))
+    
+  
+  site_comparisons <- remove_dupl_comparisons(site_comparisons)
+  
+  
+  ### calculate geographic distance between the sites 
+  
+  site_one <- as.matrix(site_comparisons[,c("site1Long", "site1Lat")])
+  site_two <- as.matrix(site_comparisons[,c("site2Long", "site2Lat")])
+  
+  dist <- data.frame(distHaversine(site_one,site_two))
+  
+## Collate together the variables for the dataset
+  
+  study_data <- site_comparisons %>% dplyr::select(site1,site2, Contrast, site1Long, site1Lat, site2Long,site2Lat, site1_spp, site2_spp)
+  study_data$min_site_spp <- ifelse(study_data$site1_spp > study_data$site2_spp, study_data$site2_spp, study_data$site1_spp) 
+  study_data <- cbind(study_data, distance = dist[,1])
+  study_data$SS <- study
+  study_data$convex_overlap <- NA
+  study_data$hyper_overlap <- NA
+  
+  
+  ### Also want to add in a variable for the minimum number of species in either of the sites used to construct the hypervolumes. This will be used as weights in the models as there may be greater uncertainty in the hypervolume overlaps when fewer species have been recorded at either site.
+
+  
+    for(i in 1:NROW(site_comparisons)){
+      
+      
+      ##### get the species in both sites being compared 
+      
+      site1 <- site_comparisons[i,"site1"]
+      site1_spp <- Similarity_data %>% filter(SSBS == site1) %>% distinct(Jetz_Name, .keep_all = FALSE)
+      
+      
+      ### join the traits and drop species names
+      
+      site1_data <- site1_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
+      rownames(site1_data) <- site1_data$Jetz_Name
+      site1_data <- as.matrix(site1_data[,-1])
+      
+      
+      ### calculate support vector machine and minimum convex hull hypervolumes 
+      
+      hypersvm_1 <- hypervolume(site1_data, method = "svm")
+      convex_1 <- expectation_convex(site1_data, check.memory = FALSE)
+      
+      
+      ### site 2
+      
+      site2 <- site_comparisons[i,"site2"]
+      site2_spp <- Similarity_data %>% filter(SSBS == site2) %>% distinct(Jetz_Name, .keep_all = FALSE)
+      
+      site2_data <- site2_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
+      rownames(site2_data) <- site2_data$Jetz_Name
+      site2_data <- as.matrix(site2_data[,-1])
+      
+      hypersvm_2 <- hypervolume(site2_data, method = "svm")
+      convex_2 <- expectation_convex(site2_data, check.memory = FALSE)
+      
+      svm_list <- hypervolume_set(hypersvm_1,hypersvm_2, check.memory = FALSE)
+      convex_list <- hypervolume_set(convex_1, convex_2, check.memory = FALSE)
+      
+      svm_overlap <- hypervolume_overlap_statistics(svm_list)
+      convex_overlap <- hypervolume_overlap_statistics(convex_list)
+      
+      study_data[i,"hyper_overlap"] <- svm_overlap[1]
+      study_data[i,"convex_overlap"] <- convex_overlap[1]
+
+    }
+
+  Overlap_data <- rbind(Overlap_data,study_data)
+  
+
+
+                         }
+
+
+
+write_rds(file = "Functional_Intactness_Index/Functional_Overlap_data.rds", Overlap_data)
+
+
+registerDoSEQ()
+```
+
+```{r hyper eval}
+Overlap_data <- readRDS("Functional_Intactness_Index/Functional_Overlap_data.rds")
+
+hist(Overlap_data$convex_overlap)
+hist(Overlap_data$hyper_overlap)
+plot(Overlap_data$convex_overlap ~ Overlap_data$hyper_overlap)
+```
+
+Can see that similarity scores are again very related to each other regardless of hypervolume method used and the scores are normally distributed.
+
+
+# 3 Other related pressures
+
+Now that we have the metrics for functional diversity and similarity/overlap calculated we are almost ready to get on with modelling how these metrics are impacted by land-use change, however there are going to be many other pressures that may effect the observed functional diversity and similarity of a site, therefore we must consider other factors. Here I calculate the other pressures for each of the models.
+
+Functional Diversity: Human Population density and density of roads at 1km and 50km radius
+
+Functional Similarity: Human population density, density of road at 1km and 50 km radius, geographic distance between sites (already calculated in the previous loop), environmental distance between sites. The pressure included in the models will be the pressure experienced at site2 and the difference in pressure between the two sites.
+
+
+
+## 3.1 Human population density
+```{r Human Population density, include=TRUE, eval=FALSE}
+PREDICTS_Site_Rao <- readRDS("Functional_Intactness_Index/PREDICTS_Site_Rao.rds")
+Overlap_data <- readRDS("Functional_Intactness_Index/Functional_Overlap_data.rds")
+
+
+
+hpd <- raster("Datasets/PREDICTS_variables/gpw_v4_population_density_adjusted_to_2015_unwpp_country_totals_rev11_2015_2pt5_min.tif")
+
+
+### calculate human population density for Functional diversity sites 
+
+hpd_values <- raster::extract(hpd,PREDICTS_Site_Rao[,c("Longitude","Latitude")])
+
+## human population density trandformed with the log +1 transformation
+PREDICTS_Site_Rao$logHPD <- log(hpd_values + 1) 
+
+
+
+### calculate for functional similarity/overlap data
+
+hpd_values_site1 <- raster::extract(hpd,Overlap_data[,c("site1Long","site1Lat")])
+hpd_values_site2 <- raster::extract(hpd,Overlap_data[,c("site2Long","site2Lat")])
+
+Overlap_data$S1logHPD <- log(hpd_values_site1 + 1)
+Overlap_data$S2logHPD <- log(hpd_values_site2 + 1)
+
+Overlap_data$logHPDdiff <- Overlap_data$S2logHPD - Overlap_data$S1logHPD
+```
+
+## 3.2 Environmental distance
+```{r environmental distance, eval=FALSE}
+
+Bioclim_5 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_5.tif")
+Bioclim_6 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_6.tif")
+Bioclim_13 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_13.tif")
+Bioclim_14 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_14.tif")
+Elevation <- raster("Datasets/Environmental_Variables/wc2.1_30s_elev.tif")
+
+
+### we only have to calculate the environmental distance when comparing two sites.
+
+site_one <- as.matrix(Overlap_data[,c("site1Long","site1Lat")])
+site_two <- as.matrix(Overlap_data[,c("site2Long","site2Lat")])
+
+environ_1 <- data.frame(Ele  = raster::extract(Elevation,site_one), B5 = raster::extract(Bioclim_5,site_one), B6 = raster::extract(Bioclim_6, site_one),
+                        B13 = raster::extract(Bioclim_13, site_one), B14 = raster::extract(Bioclim_14, site_one))
+
+environ_2 <- data.frame(Ele  = raster::extract(Elevation,site_two), B5 = raster::extract(Bioclim_5,site_two), B6 = raster::extract(Bioclim_6, site_two),
+                        B13 = raster::extract(Bioclim_13, site_two), B14 = raster::extract(Bioclim_14, site_two))
+
+
+## calculate the gowers distance between environmental variables 
+
+environ_dist <- gower_dist(x = environ_1, y = environ_2)
+#### I dont know how to best transform it now so Im just going to keep it as is
+
+Overlap_data$env_distance <- environ_dist
+
+
+```
+
+## 3.3 Density of Roads
+
+```{r Density of Roads, eval=FALSE}
+
+
+### load in the roads shape file for the americas
+Roads <- st_read("Datasets/PREDICTS_variables/groads-v1-americas-shp/groads-v1-americas-shp/gROADS-v1-americas.shp")
+### combine into a single shapefile
+Roads <- st_combine(Roads)
+### transform to be projected on the mercator projection that deals in meters rather than latlong 
+Roads <- st_transform(Roads, crs = "+proj=merc +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+
+## Both datasets are going to need information on road densities and will be some overlap of sites so make a vector of all unique sites across both datasets
+
+sites <- unique(c(Overlap_data$site1,Overlap_data$site2,PREDICTS_Site_Rao$SSBS))
+
+road_densities <- c()
+
+registerDoParallel(cores = 4)
+
+
+road_densities <- foreach(site = sites,
+                          .combine = "rbind",
+                          .packages = c("tidyverse", "sf", "rgeos", "lwgeom")) %dopar%{
+
+  
+  site_LongLat <- PREDICTS_Aves_Am %>% filter(SSBS %in% site) %>% distinct(SSBS,Longitude,Latitude)
+  
+  
+  point <- as.matrix(site_LongLat[,c("Longitude","Latitude")])
+  
+  point <- st_point(point)
+  point <- st_sfc(point)
+  
+  ### first crs needs to be in longlat format as the points are coordinates then transformed into a meters based projection such as mercator to calculate distance in km
+  
+  st_crs(point) <- "+proj=longlat +datum=WGS84 +no_defs"
+  point <- st_transform(point, crs = "+proj=merc +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+  
+  ## 1k and 50k radius around points
+  
+  buffer_1km <- st_buffer(point, 1000)
+  buffer_50km <- st_buffer(point, 50000)
+  
+  
+  ## overlap buffer with roads shape file to just get roads within each radius
+  
+  intersect_1km <- st_intersection(Roads, buffer_1km)
+  
+  #### if there are any roads caluclate the density as length of roads/area of radius
+  
+  if(length(intersect_1km) != 0 ){
+    density_1km <- (st_length(intersect_1km)/1000)/(st_area(buffer_1km)/1000000)
+  } else {
+    density_1km <- 0
+  }
+  
+  intersect_50km <- st_intersection(Roads, buffer_50km)
+  
+  if(length(intersect_50km) != 0) {
+    density_50km <- (st_length(intersect_50km)/1000)/(st_area(buffer_50km)/1000000)
+  } else {
+    density_50km <- 0
+  }
+  
+  
+  densities <- data.frame(site = paste(site), density_1km = as.numeric(density_1km), density_50km = as.numeric(density_50km))
+
+
+                          }
+
+registerDoSEQ()
+
+## simply join road densities to functional diversity dataset
+
+PREDICTS_Site_Rao <- PREDICTS_Site_Rao %>% dplyr::left_join(road_densities, by = c("SSBS" = "site"))
+
+### join to similarity dataset and calculate difference in density of roads
+
+Overlap_data <- Overlap_data %>% 
+  dplyr::left_join(road_densities, by = c("site1" = "site")) %>%
+  dplyr::rename(S1RD1K = density_1km, S1RD50K = density_50km) %>%
+  dplyr::left_join(road_densities, by = c("site2" = "site")) %>%
+  dplyr::rename(S2RD1K = density_1km, S2RD50K = density_50km)
+
+
+write_rds(file = "Datasets/PREDICTS_variables/Road_densities1_and_50k.rds", road_densities)
+
+
+```
+
+
+# Save the datasets
+
+```{r Save, eval=FALSE}
+
+write_rds(file = "Functional_Intactness_Index/Functional_Overlap_data.rds", Overlap_data)
+write_rds(file = "Functional_Intactness_Index/PREDICTS_Site_Rao.rds", PREDICTS_Site_Rao)
+
+```
+

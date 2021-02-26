@@ -1,0 +1,1202 @@
+---
+title: "Practise_FII_Modelling"
+author: "Patrick Alexander Walkden"
+date: "21/01/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Functional Intactness Index Model
+
+To model FII I am using a two stage modeling framework. The first model will take site functional diversity, measured as Rao's Q, as function of land-use type and intensity. The second model will focus on functional similarity between sites of primary minimal habitat and all other land use types. Together this is will get a measure of overall functional diversity and the proportion of that function that is retained from primary minimal sites, which once projected on to current maps of the modeled pressures and multiplied together will (hopefully) give a measure of functional intactness.    
+
+### 1.1 Modelling: Functional Diversity (PGLMM)
+
+
+Before modelling I considered whether sites that are more phylogenetically related to each other may respond similarly to landuse change and therefore may introduce non-independence into the modelling that would need to accounted for. To do so I first calculated pairwise phylogenetic similarity of sites with unifrac (the percentage of shared branch length between two communities). Using a clustering algorithmn within `hclust` that does not assume an ultmetric structure we are able to see whether the sites are clustered phylogenetically and to what extent they form a heirachial structure. A high amount of clustering would indicate that there are sites that are a lot more similar to each other than expected if they are to be independent and therefore could show correlated responses. Low clustering would show that sites aren't that phylogenetically similar to each other anyway and therefore it is not a large problem to consider. 
+
+Secondly, I checked whether the responses to landuse within study showed phylogenetic non-independence within a model that does not consider phylogenetic relatedness. I did this by calculating the differences between random slopes within studies and then identifying whether studies that are more phylogenetically similar to each other (as calculated by unifrac) have significantly more similar slopes that the global distribution of slopes. Doing this iteratively from the closest related study to the most distant I can plot the probability of rejecting the null hypothesis of that there is no differences between the similarity of slopes. A clear trend from rejecting the null hypothesis in the most related studies to accepting the null hypothesis in the most distantly related studies will be indicative of non-independence.   
+
+I am using community phylogenetic generalized linear mixed effects models (PGLMM) using the package `phyr`.  `Phyr` allows for bayesian methods of model fitting using INLA, which is advised with larger datasets.  I also considered the UN-subregion, human population density (*ln* + 1 transformed) and density of roads at both a 1km and 50km radius surrounding the site. I included study and study block as additional random effects and tested for the inclusuion of random slopes of the other pressures within study by comparing the DIC of the maximal models. The fixed effect structure was then determined through backwards stepwise model simplification by looking at whether the removal of fixed effects significantly reduced the DIC of the model.    
+
+
+
+```{r load packages, results='hide', message=FALSE, warning=FALSE}
+rm(list = ls())
+require(phytools)
+require(picante)
+require(phyr)
+require(tidyverse)
+require(raster)
+require(ggridges)
+require(motmot)
+require(lme4)
+require(poolr)
+require(car)
+```
+
+
+Load in the datasets from the previously calculated metrics.
+
+```{r data loading , echo=FALSE, message=FALSE, warning=FALSE}
+## Load in the datasets
+
+PREDICTS_site <- readRDS("../Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
+PREDICTS_abundance <- readRDS("../Functional_Intactness_Index/Outputs/abundance_data.rds")
+```
+
+
+I calculated  Rao's Q based on pairwise functional distances of species within a site weighted by their relative abundance. [Chen et al, 2018](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6037161/) highlighted that the Rao estimator might be inherently bias underestimating the true value of functional diversity and proposed an unbiased metric. I have calculated both.  
+
+```{r }
+plot(PREDICTS_site$Unbias_Rao ~ PREDICTS_site$Bias_Rao)
+abline(a=0, b=1)
+hist(PREDICTS_site$Bias_Rao, breaks = 20)
+hist(PREDICTS_site$Unbias_Rao, breaks = 20)
+```
+### Outlier check 
+```{r}
+qqPlot(PREDICTS_site$Unbias_Rao)
+```
+QQ plot has identified `DI1_2010__Milder 2  41` and `GN1_2007__VanBael 1 9 64` as potential outliers. Looking at the makeup of the sites it seems that `DI1_2010__Milder 2  41` is completely dominated by a single species *Dives dives* and from that I noticed `DI1_2010__Milder 2  48` is also dominated by *Bubulcus ibis* as well which is really skewing the calculation of the estimator. I looked at the original study published by [Milder et al 2010](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES10-00003.1) and I think there was an input error as Table 3 doesn't indicate the number of individuals being that high. So I don't know whether to exclude the data points or go back and recalculate the FD for the sites while correcting for sites that are dominated by a single species (possibly wrongly). For now I'll drop them. 
+
+With `GN1_2007__VanBael 1 9 64` I don't know whether to drop it as the value has biological relevance.
+
+```{r}
+PREDICTS_site <- PREDICTS_site[-c(41,48),]
+rownames(PREDICTS_site) <- seq(1,nrow(PREDICTS_site),1)
+```
+
+Next we'd like to have a look at how the distribution of land use types and intensities we have across our modeled sites.
+
+```{r site LUI}
+table(PREDICTS_site$LandUse, PREDICTS_site$Use_intensity)
+```
+Although Plantation forest exists as a land use class within PREDICTS it is rarely incorporated in global land-use layers therefore I included Plantation minimally used habitat in secondary vegetation light use and Plantation Light use in secondary intense use following [De Palma et al, in Review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48). Because we are collapsing some land use classes and intensities in on each other I have calculated another factor or LUI
+
+``` {r}
+#### collapse Plantation forest into secondary vegetation and relevel the LUI variable to have Primary Minimal use as its reference 
+
+PREDICTS_site$SSBS <- factor(PREDICTS_site$SSBS) %>% droplevels()
+
+PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse_Intensity = ifelse(grepl(LandUse_Intensity, pattern = "Plantation forest_Minimal use"),
+                                          "Secondary Vegetation_Light use",
+                                          paste(LandUse_Intensity)),
+                                          LandUse_Intensity = ifelse(grepl(LandUse_Intensity, pattern = "Plantation forest_Light use"),
+                                                                     "Secondary Vegetation_Intense use",
+                                                                      paste(LandUse_Intensity)),
+                                          LandUse_Intensity = relevel(factor(LandUse_Intensity), 
+                                                                      ref = "Primary_Minimal use"))
+
+table(PREDICTS_site$LandUse_Intensity)
+
+########## Going to rename for some ease of outputs
+PREDICTS_site <- PREDICTS_site %>% dplyr::rename(LUI = LandUse_Intensity)
+levels(PREDICTS_site$LUI) <- c("PriMin", "CrpLig", "CrpMin", "PasIn", "PasLig", 
+                               "PasMin","PriIn","PriLig","SecIn","SecLig","SecMin","UrbLig","UrbMin")
+
+############ Then if the modelling of LUI is not sufficient there is also a LandUse factor that has plantation forest collapsed in
+
+PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse = ifelse(LUI == "PriMin", "PriMin", paste(LandUse)),
+                                                 LandUse = ifelse(LandUse == "Plantation forest", "Secondary Vegetation", paste(LandUse)),
+                                                 LandUse = relevel(factor(LandUse), ref = "PriMin"))
+
+
+
+table(PREDICTS_site$LUI)
+table(PREDICTS_site$LandUse)
+
+
+```
+
+### Variable transformations
+The other continuous variables that I will be including in my model will be human population density, which is already log transformed, and the density of roads at 1km and 50km radius from sites.
+
+
+```{r}
+
+hist(PREDICTS_site$density_1km)
+hist(PREDICTS_site$density_1km^(1/2))
+
+hist(PREDICTS_site$density_50km)
+hist(PREDICTS_site$density_50km^(1/2))
+```
+
+### Colinearity
+
+Next I am going to check for colinearity in the predictor variables, but beforehand I apply the square root transformation to the density of roads and scale all variables to reduce possible colinearity issues. 
+
+
+```{r scale and colineararity}
+
+
+PREDICTS_site$logHPD <- scale(PREDICTS_site$logHPD)
+PREDICTS_site$Road_Density_1km <- scale(PREDICTS_site$density_1km^(1/2))
+PREDICTS_site$Road_Density_50km <- scale(PREDICTS_site$density_50km^(1/2))
+
+
+source("https://highstat.com/Books/Book2/HighstatLibV10.R")
+corvif(PREDICTS_site[,c("LUI", "logHPD", "Road_Density_1km","Road_Density_50km" ,"UN_subregion")])
+
+### a lot of colinearity try removing UN-subregion
+corvif(PREDICTS_site[,c("LUI", "logHPD", "Road_Density_1km","Road_Density_50km")])
+
+## removing UN_subregion has reduced the colinearity to acceptable levels 
+```
+### Phylogenetic Similarity
+
+Finally I calculate the pairwise phylogenetic similarity between sites, as mentioned before I will be using 1-unifrac.
+
+``` {r phylogenetic similarity, eval = FALSE, results='hide', message=FALSE, warning=FALSE}
+#### Load in Phylogeny - just tae the first one when running the inital models 
+
+
+all_bird_tree <- read.tree("../Datasets/AllBirdsHackett1.tre")
+all_bird_tree <- all_bird_tree[[1]]
+
+
+
+#############################################
+#### Unifrac for all sites among studies ####
+#############################################
+
+
+create_vcv <- function(data, level) {
+  
+  data <- droplevels(data)
+  species <- sub(unique(data$Jetz_Name),pattern = " " ,replacement = "_")
+  drop.species <- all_bird_tree$tip.label[which(!(all_bird_tree$tip.label %in% species))]
+
+  
+  overall_tree <- drop.tip(all_bird_tree, drop.species)
+  
+  
+  ID <- as.character(unique(PREDICTS_site[, level]))
+  
+  comm_data <- t(species)
+  colnames(comm_data) <- species
+  comm_data <- data.frame(comm_data[-1,])
+  
+  
+  
+  for(i in 1:length(ID)){
+    
+    ID_data <- data.frame(data[data[,level] == ID[i],c("Jetz_Name", "Effort_Corrected_Measurement")])
+    
+    for(spp in species){
+      comm_data[i,paste(spp)] <- ifelse(any(ID_data[ID_data$Jetz_Name == sub(spp,pattern = "_", replacement = " "),"Effort_Corrected_Measurement"] > 0),1,0)
+    }
+    
+    
+    rownames(comm_data)[i] <- ID[i]
+  }
+  
+  
+  for(i in 1:ncol(comm_data)){
+    comm_data[,i] <- as.numeric(comm_data[,i])
+  }
+  
+  comm_data <- as.matrix(comm_data)
+  
+  suppressWarnings(memory.limit(120000))
+  
+  vcv <- 1 - as.matrix(unifrac(comm = comm_data, tree = overall_tree))
+ 
+  
+
+  
+  return(vcv)  
+}
+
+
+site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
+  
+  write_rds(file = "../Functional_Intactness_Index/Outputs/Site_vcv.rds", site_vcv)
+```
+
+##Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
+
+```{r}
+########################################################################################################################
+##### Identify whether there is phylogenetic signal of in the responses of sites of LU change  #########################
+########################################################################################################################
+
+### first we are going to create a cluster dendrogram based on the phylogenetic distances between sites as calculated by unifrac
+### Using an non-ultmetric tree we will be able to see just how heirarchial the resulting tree is, and whether this needs to be resolved
+### in the modelling.   
+  
+  
+PREDICTS_site <- PREDICTS_site %>% droplevels()
+  
+site_vcv <- readRDS("../Functional_Intactness_Index/Outputs/site_vcv.rds")
+
+studies <- as.character(unique(PREDICTS_site$SS))
+
+## get the first site from each study as it is very difficult to observe the full tree with all sites
+
+first_site <- c()
+for(i in 1:length(studies)){
+  first <- which(grepl(studies[i],colnames(site_vcv)))[1]
+  first_site <- c(first_site, first)
+}
+
+first_sites <- site_vcv[first_site,first_site]
+
+### performing a clustering algorithm based on the distances between sites - first convert back to dissimilarites  
+
+site_dendro <- hclust(as.dist(1 - first_sites), method = "median")
+
+plot(site_dendro)
+
+### Can actually see that there is not a large amount of heirarchial structure within the sites with only studies conducted simultaneously showing a greater amount of similarity compared with the rest of the studies 
+```
+The two `Lasky` studies are related to each other because they are studies at the smae sites but between the wet and the dry season - should I then collapse them in on each other? The `Hvenegaard` studies are again at the same sites but conducted at a 50m radius and unlimited radius again should probably remove or collapse the studies into each other?
+
+```{r}
+#### This initially does not suggest that there is a large amount of phylogenetic similarity between sites resulting in hierarcial and
+#### correlated responses to land-use change - but another check I am going to conduct is to see whether the residuals of the random
+#### slopes of landuse within studies are more similar in studies that are more phylogenetically similar compared to the overall distribution
+#### of slope differences. 
+
+
+
+#### First calculate study level phylogenetic similarity 
+
+
+Study_sim <- create_vcv(PREDICTS_abundance, level = "SS")
+
+### Next run a model without accounting for phylogenetic signal of sites and extract the random slopes of response to land use across studies
+
+#1. fit model with no phylogeny in error term 
+
+
+test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density_1km  + Road_Density_50km +
+                   (1|SS) + (1|SSB) + (1 + LUI|SS), data = PREDICTS_site)
+
+
+summary(test_mod)
+car::Anova(test_mod, type = "III")
+
+#### extract the random effects 
+
+Randoms <- lme4::ranef(test_mod)
+
+study_slope <- Randoms$SS
+
+
+
+significance <- c()
+
+for(position in 1:c(length(studies)-1)){
+  
+  position_diff <- c()
+  relatives <- c()
+  
+  for(study in studies){
+    
+    position_rel <- colnames(Study_sim)[order(Study_sim[study,],decreasing = TRUE)[position + 1]]
+    rel_diff <- abs(study_slope[study,] - study_slope[position_rel,])
+    rownames(rel_diff) <- paste(position_rel)
+    
+    
+    position_diff <- rbind(position_diff, rel_diff)
+    relatives <- rbind(relatives,data.frame(stud1 = study, stud2 = position_rel) )
+    
+  }
+  
+  stud_com <- data.frame(gtools::combinations(v = studies, r = 2, n = c(length(studies)-1)))
+  
+  drops <- c()
+  for(k in 1:nrow(relatives)){
+    drop_row <- which(stud_com$X1 == relatives[k,1] & stud_com$X2 == relatives[k,2] | stud_com$X1 == relatives[k,2] & stud_com$X2 == relatives[k,1] )
+    drops <- c(drops,drop_row)
+  }
+  
+  stud_com <- stud_com[-unique(drops),]
+  
+  global_differences <- c()
+  for(i in 1:NROW(stud_com)){
+    abs_diff <- abs(study_slope[stud_com[i,1],] - study_slope[stud_com[i,2],])
+    rownames(abs_diff) <- paste(stud_com[i,2]) 
+    
+    global_differences <- rbind(global_differences, abs_diff)
+  }
+  
+  
+  
+  p_val <- wilcox.test(position_diff[,2], global_differences[,2], alternative = "less")
+  p_val <- data.frame(Position = position, significance =  p_val$p.value)
+  
+  significance <- rbind(significance, p_val)
+  
+}
+
+#### plot doesn't clearly indicate that the responses of sites within studies are significantly more similar in more phylogenetically
+#### similar sites 
+
+plot(significance$significance ~ significance$Position)
+
+### fishers method - combined p values testing whether the hypothesis test (are the difference in slopes significantly more similar
+### to each other in studies that are more phylogenetically related?)
+
+
+### No they are not 
+
+poolr::fisher(significance$significance)
+
+```
+There does seem to be a slight association between the probability of rejecting the null hypothesis and the phylogenetic similarity of the comparison study so that when comparing the differences in slopes in more phylogenetically related studies there is a greater probability of the differences in slopes being significantly more similar to each compared to the gloabal distribution of differences in slopes. However, when performing a Fishers combined probability there is not a signifcant difference so we can accept the null hypothesis. --- Possibly if I drop the two related studies `lasky` and `hvengaard`... Removing one of each made the p-value from fishers combined increase a good amount.
+
+Therefore, that does not indicate to me at the moment that I need to account for phylogenetic similarity of sites within the modelling framework therefore I will continue on with GLMMs, however, I will continue to use the `phyr` package as it will allow me to fit models using INLA and bayesian techniques, which helps with some convergence issues.
+
+### INLA/GLMM
+
+With that we now have everything ready to begin modeling. Random effects that I will be including in the models will be study, to account for between study differences in location, method and sampling effort and study block, to account for spatial configuration of sites. Additionally, I will be testing for random slopes for each of the predictor variables within study by identifying which random effect structure has the lowest DIC in the maximal model.
+
+
+```{r PGLMM modeling, eval=FALSE, message=FALSE, warning=FALSE}
+####################################
+# With this we can proceed with modelling using GLMMs as opposed to PGLMMs 
+###################################
+PREDICTS_site <- PREDICTS_site %>% droplevels()
+
+
+
+
+Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                                       LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_1b)
+
+#### lets see what random effect structure gives the best AIC 
+
+### adding random slopes 1) LUI within study 
+
+
+Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+                      (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
+
+summary(Rao_Model_2b)
+
+#2) logHPD within study 
+
+
+
+Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+                      (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
+
+summary(Rao_Model_3b)
+
+#3) Road Density_1km within study  
+
+
+Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+                      (1|SS) + (1|SSB) + (Road_Density_1km|SS), data = PREDICTS_site, bayes = TRUE)
+
+summary(Rao_Model_4b)
+
+# 4) Road_Density_50kmm within study 
+
+
+Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+                      (1|SS) + (1|SSB) + (Road_Density_50km|SS), data = PREDICTS_site, bayes = TRUE)
+
+summary(Rao_Model_5b)
+
+
+
+
+Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 = Rao_Model_3b$DIC,
+                         mod4 = Rao_Model_4b$DIC, mod5 = Rao_Model_5b$DIC)
+```
+
+The model with the lowest DIC is with no random slope therefore model 1 will be carried forward. 
+
+Next to identify the optimal fixed effect structure I removed both interactions in turn to see whether that reduced the DIC of the model. Typically a reduction >2 will provide support for the simplified model. 
+
+```{r fixed effect structure, eval = FALSE}
+
+#### Remove each interaction to see if thsis improves the model at all. 
+
+#LUI:RD50k
+
+Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                                       LUI:logHPD + LUI:Road_Density_1km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_6b)
+
+Rao_Model_6b$DIC - Rao_Model_1b$DIC   #### Model DIC is reduced by 9 and so the reduced model carries forward
+
+## RD50k fixed
+
+Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
+                                       LUI:logHPD + LUI:Road_Density_1km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_7b)
+
+Rao_Model_7b$DIC - Rao_Model_6b$DIC   ####  DIC icreases so the previous model is retained
+
+
+#### LUI:RD1k
+
+Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                                       LUI:logHPD +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_8b)
+
+Rao_Model_8b$DIC - Rao_Model_6b$DIC   #### Model DIC is reduced by 16 and so the reduced model carries forward
+
+
+####  RD50k
+
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
+                                       LUI:logHPD +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_9b)
+
+Rao_Model_9b$DIC - Rao_Model_8b$DIC   #### Model DIC increases so previous model is retained
+
+
+### RD1k 
+
+Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_50km +
+                                       LUI:logHPD +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_10b)
+
+Rao_Model_10b$DIC - Rao_Model_8b$DIC   #### Model DIC increases so the previous model is retained
+
+
+### LUI:logHPD
+
+Rao_Model_11b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_11b)
+
+Rao_Model_11b$DIC - Rao_Model_8b$DIC   #### Model DIC is reduced by 8 and so the reduced model carries forward
+
+
+#### RD50k
+
+
+Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_12b)
+
+Rao_Model_12b$DIC - Rao_Model_11b$DIC   #### Model DIC is reduced by 1 but that is higher than the threshold of 2 so the previous model is retained
+
+#### RD1k
+
+Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_50km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_13b)
+
+Rao_Model_13b$DIC - Rao_Model_11b$DIC   #### Model DIC increases so the previous model is retained
+
+### logHPD
+
+
+Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + Road_Density_1km + Road_Density_50km +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_14b)
+
+Rao_Model_14b$DIC - Rao_Model_11b$DIC   ### Model DIC is reduced by 1 but that is higher than the threshold of 2 so the previous model is retained
+
+####
+
+summary(Rao_Model_11b)
+
+site_vcv_test <- site_vcv[which(rownames(site_vcv) %in% PREDICTS_site$SSBS),which(rownames(site_vcv) %in% PREDICTS_site$SSBS)]
+### best to experiment lets have a look at what happens when adding the site vcv to the model
+
+```
+
+### **Final Model**
+
+After going through model selection the best model seems to be the one with LUI, logHPD and RD1k and RD50k as Fixed effects and no interactions between LUI and any of the other pressures with the best model being `Rao_Model_11b`. 
+```{r save model}
+## funtion to visualise the residuals from the PGLMM and check whether they are normally distributed 
+
+residuals.communityPGLMM <- function(
+  object, 
+  type = if(object$family %in% c("binomial","poisson")) "deviance" else "response",
+  scaled = FALSE, ...){
+  if(object$family == "gaussian"){
+    y <- object$Y
+    mu <- pglmm_predicted_values(object)$Y_hat
+    res <- switch(type,
+                  deviance = stop("no deviance residuals for gaussian model", call. = FALSE),
+                  response = y - mu
+    )
+    if(scaled) res/sqrt(object$s2resid)
+  }
+  
+  if(object$family %in% c("binomial","poisson")){
+    y <- as.numeric(object$Y)
+    mu <- unname(object$mu[, 1])
+    if(object$family == "binomial") dres <- sqrt(binomial()$dev.resids(y, mu, 1))
+    if(object$family == "poisson") dres <- sqrt(poisson()$dev.resids(y, mu, 1))
+    res <- switch(type,
+                  deviance = {
+                    dres
+                    ifelse(y > mu, dres, - dres)
+                  },
+                  response = y - mu
+    )
+  }
+  if(object$family %nin% c("gaussian", "binomial", "poisson"))
+    stop("no residual methods for family other than gaussian, binomial and poisson, yet", call. = FALSE)
+  
+  unname(res)
+}
+
+Resid_check <- residuals.communityPGLMM(Rao_Model_11b)
+
+plot(Resid_check)
+  
+qqnorm(Resid_check)
+qqline(Resid_check)
+
+
+
+write_rds(file = "Functional_Intactness_Index/Rao_model.rds", Rao_Model6)
+```
+
+Briefly, the summary of the final model indicates that Functional diversity, compared to that of Primary minimally used land use, is reduced in cropland, urban and minimally used secondary vegetation, while it increases in intensely used and lightly used secondary vegetation, and pasture and primary land use across intensity gradients. Additionally, 
+
+
+
+## 1.2 Modelling: Functional Similarity/Overlap (GLMM)
+
+To assess the impact of landuse change and other pressures on functional similarity I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
+
+To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. To determine the best fixed effect structure is more difficult however, as the comparisons are not-independent of each other as a single primary minimal site will being compared to multiple of other sites, therefore traditional likelihood ratio tests will not best suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model.
+
+
+```{r load in data, eval=FALSE}
+Overlap_data <- readRDS("Functional_Intactness_Index/Functional_Overlap_data.rds")
+Similarity_data <- readRDS("Functional_Intactness_Index/similarity_data.rds")
+
+
+### Also want to add in a variable for the minimum number of species in either of the sites used to construct the hypervolumes. This will be used as weights in the models as there may be greater uncertainty in the hypervolume overlaps when fewer species have been recorded at either site.
+
+
+
+## lets have a look at the other variables and what transformations will be best 
+
+hist(car::logit(Overlap_data$hyper_overlap, adjust = 0.001, percents = FALSE))
+
+
+## because the similarity metric is bound between 0 and 1 and i performed a logit transformation as well as taking the log of the geographic distance and applying other transformations to the variables
+
+Overlap_data <- Overlap_data %>% dplyr::mutate(logitOver = car::logit(hyper_overlap, adjust = 0.001, percents = FALSE)) %>%
+  dplyr::mutate(logdist = log(distance + 1),
+                rt3env = env_distance^(1/3),
+                sqrtS2RD1K = S2RD1K^(1/2),
+                sqrtS2RD50K = S2RD50K^(1/2))
+
+
+
+table(Overlap_data$Contrast)
+
+
+
+Overlap_data$Contrast <- ifelse(grepl(Overlap_data$Contrast, pattern = "Plantation forest"), 
+                                   "Primary_Minimal use-Secondary Vegetation_Light use",
+                                   paste(Overlap_data$Contrast))
+
+table(Overlap_data$Contrast)
+
+
+Overlap_data$Contrast <- relevel(factor(Overlap_data$Contrast), ref = "Primary_Minimal use-Primary_Minimal use")
+
+Overlap_data$rt3env <- scale(Overlap_data$rt3env)
+Overlap_data$s2logHPD <- scale(Overlap_data$S2logHPD)
+Overlap_data$logHPDdiff <- scale(Overlap_data$logHPDdiff)
+Overlap_data$logdist <- scale(Overlap_data$logdist)
+Overlap_data$sqrtS2RD1K <- scale(Overlap_data$sqrtS2RD1K)
+Overlap_data$sqrtS2RD50K <- scale(Overlap_data$sqrtS2RD50K)
+Overlap_data$RD1Kdiff <- scale(Overlap_data$RD1Kdiff)
+Overlap_data$RD50Kdiff <- scale(Overlap_data$RD50Kdiff)
+
+
+source("https://highstat.com/Books/Book2/HighstatLibV10.R")
+
+corvif(Overlap_data[,c("Contrast", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
+
+### some colinearity problems lets drop site2HPD
+
+corvif(Overlap_data[,c("Contrast", "logdist", "rt3env", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
+
+
+write_rds(file = "Functional_Intactness_Index/Overlap_modelling_data.rds", Overlap_data)
+## that improve colinearity to acceptable levels  so we can move onto modeling 
+```
+
+```{r Overlap Modeling, eval = FALSE}
+
+################################
+##### Modelling ################
+################################
+
+
+
+Model_1 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_1)
+
+AIC(Model_1)
+
+#### random slopes
+
+## logdist
+
+Model_2 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + logdist|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_2)
+
+AIC(Model_2)
+
+## rt3env
+
+Model_3 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + rt3env|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_3)
+
+AIC(Model_3)
+
+
+## logHPDdiff
+
+Model_4 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + logHPDdiff|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_4)
+
+AIC(Model_4)
+
+## sqrtS2RD1K
+
+Model_5 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                   (1|SS) + (1 + sqrtS2RD1K|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_5)
+
+AIC(Model_5)
+
+## sqrtS2RD50K
+
+Model_6 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + sqrtS2RD50K|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_6)
+
+AIC(Model_6)
+
+## RoadDdiff1k
+
+Model_7 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env + Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + RD1Kdiff|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_7)
+
+AIC(Model_7)
+
+## RoadDdiff50k
+
+Model_8 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+                  (1|SS) + (1 + RD50Kdiff|SS),
+                data = Overlap_data, weights = min_site_spp )
+
+summary(Model_8)
+
+AIC(Model_8)
+
+
+
+MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
+                      Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
+                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8))
+
+
+
+```
+
+
+Model 1 seems to have the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
+
+
+```{r permuted data, eval = FALSE}
+
+Permuted_data <- rep(list(NA),1000)
+
+for(i in 1:1000){
+  
+  sample_data <-c()
+  
+  for(study in unique(Overlap_data$SS)){
+    data <- Overlap_data %>% filter(SS == study)
+    
+    data$logitOver <- data[sample(NROW(data)),"logitOver"]
+    
+    sample_data <- rbind(sample_data,data)
+     
+  }
+  
+  Permuted_data[[i]] <- sample_data
+  
+}
+
+#### function to generate the LR distribution across the 100 datasets
+
+##### Liklihood ratio function
+
+Permuted_model_simplification <- function(data, model1, model2){
+
+  LRT_dist <- c()
+  
+  for(i in 1:length(data)){
+  
+  mod1 <- lmer(model1@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
+  mod2 <- lmer(model2@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
+  
+  LRT <- anova(mod1,mod2)
+  LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]
+  
+  LRT_dist <- rbind(LRT_dist,LRT)
+  
+  }
+
+  return(LRT_dist)  
+  
+}
+
+
+### so lets look at our best maximal model
+
+Anova(Model_1, type = "II")
+
+### with the lowest p-value we should remove the interaction between Contrast and RD50Kdiff
+
+Model_9 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_9)
+
+AIC(Model_9)
+
+
+Like_ratio <- anova(Model_1, Model_9)
+
+
+LRT_dist1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_9)
+
+ ninety_five <- quantile(LRT_dist1,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_9,type = "II")
+
+### lets remove RD50Kdiff fixed effect
+
+Model_10 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_10)
+
+AIC(Model_10)
+
+
+Like_ratio <- anova(Model_9, Model_10)
+
+
+LRT_dist2 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, model2 = Model_10)
+
+ ninety_five <- quantile(LRT_dist2,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_10,type = "II")
+
+### next if we will remove sqrtS2RD1k interaction
+
+Model_11 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_11)
+
+AIC(Model_11)
+
+
+Like_ratio <- anova(Model_10, Model_11)
+
+
+LRT_dist3 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, model2 = Model_11)
+
+ ninety_five <- quantile(LRT_dist3,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_11,type = "II")
+
+### next we will remove sqrtS2RD1k fixed effect
+
+Model_12 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_12)
+
+AIC(Model_12)
+
+
+Like_ratio <- anova(Model_11, Model_12)
+
+
+LRT_dist4 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, model2 = Model_12)
+
+ ninety_five <- quantile(LRT_dist4,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_12,type = "II")
+
+### next we will remove the interaction between rt3env and Contrast
+
+Model_13 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logdist +  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_13)
+
+AIC(Model_13)
+
+
+Like_ratio <- anova(Model_12, Model_13)
+
+
+LRT_dist5 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, model2 = Model_13)
+
+ ninety_five <- quantile(LRT_dist5,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_13,type = "II")
+
+### next we will remove the interaction between logdist and Contrast
+
+Model_14 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_14)
+
+AIC(Model_14)
+
+
+Like_ratio <- anova(Model_13, Model_14)
+
+
+LRT_dist6 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, model2 = Model_14)
+
+ ninety_five <- quantile(LRT_dist6,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_14,type = "II")
+
+### next we will remove the rt3env fixed effect
+
+Model_15 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logHPDdiff +
+                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_15)
+
+AIC(Model_15)
+
+
+Like_ratio <- anova(Model_14, Model_15)
+
+
+LRT_dist7 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, model2 = Model_15)
+
+ ninety_five <- quantile(LRT_dist7,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_15,type = "II")
+
+### next we will remove the interaction between the interaction between sqrts2RD50k
+
+Model_16 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logHPDdiff +
+                  Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_16)
+
+AIC(Model_16)
+
+
+Like_ratio <- anova(Model_15, Model_16)
+
+
+LRT_dist8 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, model2 = Model_16)
+
+ ninety_five <- quantile(LRT_dist8,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
+##### interaction can be dropped from the model.
+
+Anova(Model_16,type = "II")
+
+### next we will remove the interaction between the interaction between RD1Kdiff
+
+Model_17 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logHPDdiff +
+                                   (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_17)
+
+AIC(Model_17)
+
+
+Like_ratio <- anova(Model_16, Model_17)
+
+
+LRT_dist9 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_17)
+
+ ninety_five <- quantile(LRT_dist9,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+
+##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
+
+Anova(Model_16,type = "II")
+
+### next we will remove the interaction between the interaction between Contrast and logHPDdiff
+
+Model_18 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                   Contrast:RD1Kdiff +
+                                   (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_18)
+
+AIC(Model_18)
+
+
+Like_ratio <- anova(Model_16, Model_18)
+
+
+LRT_dist10 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_18)
+
+ ninety_five <- quantile(LRT_dist10,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
+
+Anova(Model_16,type = "II")
+
+### next we will remove the sqrtS2RD1K fixed effect
+
+Model_19 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  RD1Kdiff + 
+                   Contrast:RD1Kdiff +
+                   Contrast:logHPDdiff +
+                                   (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_19)
+
+AIC(Model_19)
+
+
+Like_ratio <- anova(Model_16, Model_19)
+
+
+LRT_dist11 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_19)
+
+ ninety_five <- quantile(LRT_dist11,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+
+
+##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
+
+Anova(Model_16,type = "II")
+
+### next we will remove the logdist fixed effect
+
+Model_20 <- lmer(logitOver ~ Contrast + logHPDdiff + 
+                  RD1Kdiff + sqrtS2RD1K +
+                   Contrast:RD1Kdiff +
+                   Contrast:logHPDdiff +
+                                   (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+summary(Model_20)
+
+AIC(Model_20)
+
+
+Like_ratio <- anova(Model_16, Model_20)
+
+
+LRT_dist12 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_20)
+
+ ninety_five <- quantile(LRT_dist12,0.95)
+
+Like_ratio[2,"Chisq"] > ninety_five
+```
+
+Finally testing the removal of all other fixed effects and interactions in the model I have found that `Model_16` is the best model where these removals result in a model with significantly less explanatory power based on the permuted datasets.
+
+Looking more closely at the model output we can see that the similarity of communities compared to that of primary minimally used sites 
+
+
+``` {r final Overlap Model}
+Overlap_data <- readRDS("Functional_Intactness_Index/Overlap_modelling_data.rds")
+
+Model_16 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
+                  sqrtS2RD1K + RD1Kdiff + 
+                  Contrast:logHPDdiff +
+                  Contrast:RD1Kdiff +
+                 (1|SS),
+              data = Overlap_data, weights = min_site_spp )
+
+
+
+Anova(Model_16,type = "III")
+
+### next we will remove the interaction between the interaction between sqrts2RD50k
+summary(Model_16)
+
+AIC(Model_16)
+
+resid_panel(Model_16)
+
+
+
+write_rds(file = "Functional_Intactness_Index/Overlap_GLMM.rds", Model_16)
+```
