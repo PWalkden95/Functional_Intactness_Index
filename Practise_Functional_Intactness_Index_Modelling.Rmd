@@ -1,7 +1,7 @@
 ---
 title: "Practise_FII_Modelling"
 author: "Patrick Alexander Walkden"
-date: "21/01/2021"
+date: "25/02/2021"
 output:
   pdf_document: default
   html_document: default
@@ -18,7 +18,7 @@ To model FII I am using a two stage modeling framework. The first model will tak
 ### 1.1 Modelling: Functional Diversity (PGLMM)
 
 
-Before modelling I considered whether sites that are more phylogenetically related to each other may respond similarly to landuse change and therefore may introduce non-independence into the modelling that would need to accounted for. To do so I first calculated pairwise phylogenetic similarity of sites with unifrac (the percentage of shared branch length between two communities). Using a clustering algorithmn within `hclust` that does not assume an ultmetric structure we are able to see whether the sites are clustered phylogenetically and to what extent they form a heirachial structure. A high amount of clustering would indicate that there are sites that are a lot more similar to each other than expected if they are to be independent and therefore could show correlated responses. Low clustering would show that sites aren't that phylogenetically similar to each other anyway and therefore it is not a large problem to consider. 
+Before modeling I considered whether sites that are more phylogenetically related to each other may respond similarly to landuse change and therefore may introduce non-independence into the modeling that would need to accounted for. To do so I first calculated pairwise phylogenetic similarity of sites with unifrac (the percentage of shared branch length between two communities). Using a clustering algorithm within `hclust` that does not assume an ultmetric structure we are able to see whether the sites are clustered phylogenetically and to what extent they form a heirachial structure. A high amount of clustering would indicate that there are sites that are a lot more similar to each other than expected if they are to be independent and therefore could show correlated responses. Low clustering would show that sites aren't that phylogenetically similar to each other anyway and therefore it is not a large problem to consider. 
 
 Secondly, I checked whether the responses to landuse within study showed phylogenetic non-independence within a model that does not consider phylogenetic relatedness. I did this by calculating the differences between random slopes within studies and then identifying whether studies that are more phylogenetically similar to each other (as calculated by unifrac) have significantly more similar slopes that the global distribution of slopes. Doing this iteratively from the closest related study to the most distant I can plot the probability of rejecting the null hypothesis of that there is no differences between the similarity of slopes. A clear trend from rejecting the null hypothesis in the most related studies to accepting the null hypothesis in the most distantly related studies will be indicative of non-independence.   
 
@@ -65,7 +65,7 @@ qqPlot(PREDICTS_site$Unbias_Rao)
 ```
 QQ plot has identified `DI1_2010__Milder 2  41` and `GN1_2007__VanBael 1 9 64` as potential outliers. Looking at the makeup of the sites it seems that `DI1_2010__Milder 2  41` is completely dominated by a single species *Dives dives* and from that I noticed `DI1_2010__Milder 2  48` is also dominated by *Bubulcus ibis* as well which is really skewing the calculation of the estimator. I looked at the original study published by [Milder et al 2010](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES10-00003.1) and I think there was an input error as Table 3 doesn't indicate the number of individuals being that high. So I don't know whether to exclude the data points or go back and recalculate the FD for the sites while correcting for sites that are dominated by a single species (possibly wrongly). For now I'll drop them. 
 
-With `GN1_2007__VanBael 1 9 64` I don't know whether to drop it as the value has biological relevance.
+With `GN1_2007__VanBael 1 9 64` I don't know whether to drop it may be a true value of biological relevance.
 
 ```{r}
 PREDICTS_site <- PREDICTS_site[-c(41,48),]
@@ -109,7 +109,6 @@ PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse = ifelse(LUI == "PriMin
 
 
 table(PREDICTS_site$LUI)
-table(PREDICTS_site$LandUse)
 
 
 ```
@@ -136,15 +135,15 @@ Next I am going to check for colinearity in the predictor variables, but beforeh
 
 
 PREDICTS_site$logHPD <- scale(PREDICTS_site$logHPD)
-PREDICTS_site$Road_Density_1km <- scale(PREDICTS_site$density_1km^(1/2))
-PREDICTS_site$Road_Density_50km <- scale(PREDICTS_site$density_50km^(1/2))
+PREDICTS_site$RD1k <- scale(PREDICTS_site$density_1km^(1/2))
+PREDICTS_site$RD50k <- scale(PREDICTS_site$density_50km^(1/2))
 
 
 source("https://highstat.com/Books/Book2/HighstatLibV10.R")
-corvif(PREDICTS_site[,c("LUI", "logHPD", "Road_Density_1km","Road_Density_50km" ,"UN_subregion")])
+corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k" ,"UN_subregion")])
 
 ### a lot of colinearity try removing UN-subregion
-corvif(PREDICTS_site[,c("LUI", "logHPD", "Road_Density_1km","Road_Density_50km")])
+corvif(PREDICTS_site[,c("LUI", "logHPD", "RD1k","RD50k")])
 
 ## removing UN_subregion has reduced the colinearity to acceptable levels 
 ```
@@ -216,7 +215,7 @@ create_vcv <- function(data, level) {
 
 site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
   
-  write_rds(file = "../Functional_Intactness_Index/Outputs/Site_vcv.rds", site_vcv)
+  write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
 ```
 
 ##Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
@@ -233,7 +232,7 @@ site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
   
 PREDICTS_site <- PREDICTS_site %>% droplevels()
   
-site_vcv <- readRDS("../Functional_Intactness_Index/Outputs/site_vcv.rds")
+site_vcv <- readRDS("Outputs/site_vcv.rds")
 
 studies <- as.character(unique(PREDICTS_site$SS))
 
@@ -275,12 +274,9 @@ Study_sim <- create_vcv(PREDICTS_abundance, level = "SS")
 #1. fit model with no phylogeny in error term 
 
 
-test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density_1km  + Road_Density_50km +
+test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k  + RD50k +
                    (1|SS) + (1|SSB) + (1 + LUI|SS), data = PREDICTS_site)
 
-
-summary(test_mod)
-car::Anova(test_mod, type = "III")
 
 #### extract the random effects 
 
@@ -352,7 +348,7 @@ poolr::fisher(significance$significance)
 ```
 There does seem to be a slight association between the probability of rejecting the null hypothesis and the phylogenetic similarity of the comparison study so that when comparing the differences in slopes in more phylogenetically related studies there is a greater probability of the differences in slopes being significantly more similar to each compared to the gloabal distribution of differences in slopes. However, when performing a Fishers combined probability there is not a signifcant difference so we can accept the null hypothesis. --- Possibly if I drop the two related studies `lasky` and `hvengaard`... Removing one of each made the p-value from fishers combined increase a good amount.
 
-Therefore, that does not indicate to me at the moment that I need to account for phylogenetic similarity of sites within the modelling framework therefore I will continue on with GLMMs, however, I will continue to use the `phyr` package as it will allow me to fit models using INLA and bayesian techniques, which helps with some convergence issues.
+Therefore, that does not indicate to me at the moment that I need to account for phylogenetic similarity of sites within the modelling framework, as there is not a clear hiearchy of sites with greater phylogenetic similarity to each other and they are not significantly ore similar in their responses to ;and use change therefore I will continue on with GLMMs, however, I will continue to use the `phyr` package as it will allow me to fit models using INLA and bayesian techniques, which helps with some convergence issues.
 
 ### INLA/GLMM
 
@@ -368,8 +364,8 @@ PREDICTS_site <- PREDICTS_site %>% droplevels()
 
 
 
-Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                                       LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
@@ -380,8 +376,8 @@ summary(Rao_Model_1b)
 ### adding random slopes 1) LUI within study 
 
 
-Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_2b)
@@ -390,8 +386,8 @@ summary(Rao_Model_2b)
 
 
 
-Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
+Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_3b)
@@ -399,18 +395,18 @@ summary(Rao_Model_3b)
 #3) Road Density_1km within study  
 
 
-Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
-                      (1|SS) + (1|SSB) + (Road_Density_1km|SS), data = PREDICTS_site, bayes = TRUE)
+Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_4b)
 
-# 4) Road_Density_50kmm within study 
+# 4) RD50km within study 
 
 
-Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                      LUI:logHPD + LUI:Road_Density_1km + LUI:Road_Density_50km +
-                      (1|SS) + (1|SSB) + (Road_Density_50km|SS), data = PREDICTS_site, bayes = TRUE)
+Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_5b)
 
@@ -431,118 +427,147 @@ Next to identify the optimal fixed effect structure I removed both interactions 
 
 #LUI:RD50k
 
-Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                                       LUI:logHPD + LUI:Road_Density_1km +
+Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                                       LUI:logHPD + LUI:RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_6b)
 
-Rao_Model_6b$DIC - Rao_Model_1b$DIC   #### Model DIC is reduced by 9 and so the reduced model carries forward
+#LUI:RD1k
 
-## RD50k fixed
-
-Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
-                                       LUI:logHPD + LUI:Road_Density_1km +
+Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                                       LUI:logHPD + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_7b)
 
-Rao_Model_7b$DIC - Rao_Model_6b$DIC   ####  DIC icreases so the previous model is retained
+# LUI:logHPD
 
-
-#### LUI:RD1k
-
-Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
-                                       LUI:logHPD +
+Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+                                       LUI:RD50k + LUI:RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_8b)
 
-Rao_Model_8b$DIC - Rao_Model_6b$DIC   #### Model DIC is reduced by 16 and so the reduced model carries forward
+Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
+                                RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
+                                logHPD = Rao_Model_8b$DIC - Rao_Model_1b$DIC)   
 
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD1k so model 7b is best 
 
-####  RD50k
+## RD1k fixed
 
-Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
-                                       LUI:logHPD +
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
+                                       LUI:logHPD + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_9b)
 
-Rao_Model_9b$DIC - Rao_Model_8b$DIC   #### Model DIC increases so previous model is retained
+# LUI:RD50k
 
-
-### RD1k 
-
-Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_50km +
+Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
                                        LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_10b)
 
-Rao_Model_10b$DIC - Rao_Model_8b$DIC   #### Model DIC increases so the previous model is retained
+# LUI:logHPD
 
-
-### LUI:logHPD
-
-Rao_Model_11b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + Road_Density_1km + Road_Density_50km +
+Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
+                                        LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_11b)
 
-Rao_Model_11b$DIC - Rao_Model_8b$DIC   #### Model DIC is reduced by 8 and so the reduced model carries forward
+
+Model_differences <- data.frame(RD1k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
+                                RD50k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
+                                logHPD = Rao_Model_11b$DIC - Rao_Model_7b$DIC)   
 
 
-#### RD50k
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 10b is best 
 
+## RD50k fixed
 
-Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_1km +
+Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
+                                       LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_12b)
 
-Rao_Model_12b$DIC - Rao_Model_11b$DIC   #### Model DIC is reduced by 1 but that is higher than the threshold of 2 so the previous model is retained
+### RD1k fixed
 
-#### RD1k
-
-Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density_50km +
+Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
+                                       LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_13b)
 
-Rao_Model_13b$DIC - Rao_Model_11b$DIC   #### Model DIC increases so the previous model is retained
-
-### logHPD
+#### LUI:logHPD
 
 
-Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + Road_Density_1km + Road_Density_50km +
+Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 summary(Rao_Model_14b)
 
-Rao_Model_14b$DIC - Rao_Model_11b$DIC   ### Model DIC is reduced by 1 but that is higher than the threshold of 2 so the previous model is retained
+Model_differences <- data.frame(RD50k = Rao_Model_12b$DIC - Rao_Model_10b$DIC,
+                                RD1k = Rao_Model_13b$DIC - Rao_Model_10b$DIC,
+                                logHPD = Rao_Model_14b$DIC - Rao_Model_10b$DIC)   
+
+#### Model DIC is reduced wehn removing the interaction between LUI:logHPD and is increased in the other cases so model 14 is carried forward.
+
+#### RD50k
+
+
+Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_15b)
+
+
+#### RD1k
+
+Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_16b)
+
+### logHPD
+
+
+Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+summary(Rao_Model_17b)
+
+
+Model_differences <- data.frame(RD50k = Rao_Model_15b$DIC - Rao_Model_14b$DIC,
+                                RD1k = Rao_Model_16b$DIC - Rao_Model_14b$DIC,
+                                logHPD = Rao_Model_17b$DIC - Rao_Model_14b$DIC)  
 
 ####
 
-summary(Rao_Model_11b)
 
-site_vcv_test <- site_vcv[which(rownames(site_vcv) %in% PREDICTS_site$SSBS),which(rownames(site_vcv) %in% PREDICTS_site$SSBS)]
-### best to experiment lets have a look at what happens when adding the site vcv to the model
+
 
 ```
 
 ### **Final Model**
 
-After going through model selection the best model seems to be the one with LUI, logHPD and RD1k and RD50k as Fixed effects and no interactions between LUI and any of the other pressures with the best model being `Rao_Model_11b`. 
+After going through model selection the best model seems to be the one with LUI, logHPD and RD1k and RD50k as Fixed effects and no interactions between LUI and any of the other pressures with the best model being `Rao_Model_14b`. 
 ```{r save model}
 ## funtion to visualise the residuals from the PGLMM and check whether they are normally distributed 
 
@@ -579,7 +604,7 @@ residuals.communityPGLMM <- function(
   unname(res)
 }
 
-Resid_check <- residuals.communityPGLMM(Rao_Model_11b)
+Resid_check <- residuals.communityPGLMM(Rao_Model_14b)
 
 plot(Resid_check)
   
@@ -588,10 +613,15 @@ qqline(Resid_check)
 
 
 
-write_rds(file = "Functional_Intactness_Index/Rao_model.rds", Rao_Model6)
+write_rds(file = "Outputs/Rao_model.rds", Rao_Model_14b)
+```
+### Rao_Model_14b
+
+```{r}
+summary(Rao_Model_14b)
 ```
 
-Briefly, the summary of the final model indicates that Functional diversity, compared to that of Primary minimally used land use, is reduced in cropland, urban and minimally used secondary vegetation, while it increases in intensely used and lightly used secondary vegetation, and pasture and primary land use across intensity gradients. Additionally, 
+The summary of the final Rao model shows that Functional diversity is predicted to be reduced across LUIs except Primary intense use and Secondary intense use where it is predicted to increase slightly. Significant reductions, as determined by the credible intervals of the parameter distribution not crossing zero, were shown in cropland light and minimal, pasture intense and minimal, secondary light and minimal and urban minimal habitats.   
 
 
 
