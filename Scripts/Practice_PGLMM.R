@@ -9,11 +9,15 @@ require(ggridges)
 require(motmot)
 require(lme4)
 require(poolr)
+require(car)
+require(robustlmm)
 
 ## Load in the datasets
 
-PREDICTS_site <- readRDS("Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
-PREDICTS_abundance <- readRDS("Functional_Intactness_Index/Outputs/abundance_data.rds")
+PREDICTS_site <- readRDS("Outputs/PREDICTS_Site_Rao.rds")
+PREDICTS_abundance <- readRDS("Outputs/abundance_data.rds")
+
+
 
 
 hist(PREDICTS_site$Bias_Rao, breaks = 20)
@@ -67,17 +71,18 @@ table(PREDICTS_site$LandUse)
 
 
 PREDICTS_site$logHPD <- scale(PREDICTS_site$logHPD)
-PREDICTS_site$Road_Density1k <- scale(PREDICTS_site$sqrtRD1k)
-PREDICTS_site$Road_Density50k <- scale(PREDICTS_site$sqrtRD50k)
+PREDICTS_site$RD1k <- scale(PREDICTS_site$sqrtRD1k)
+PREDICTS_site$RD50k <- scale(PREDICTS_site$sqrtRD50k)
+PREDICTS_site$CNTRLlogHPD <- scale(PREDICTS_site$CNTRLlogHPD)
 
 #### UN subregion and Landuse intensit were very colinear and therefore I dropped UN subregion as a factor in the modelling
 
 
 source("https://highstat.com/Books/Book2/HighstatLibV10.R")
-corvif(PREDICTS_site[,c( "LUI", "logHPD", "Road_Density1k","Road_Density50k" ,"UN_subregion")])
+corvif(PREDICTS_site[,c( "LUI", "logHPD", "RD1k","RD50k" ,"UN_subregion")])
 
 
-corvif(PREDICTS_site[,c( "LUI", "logHPD",  "Road_Density1k","Road_Density50k")])
+corvif(PREDICTS_site[,c( "LUI", "logHPD",  "RD1k","RD50k")])
 
 
 #### Road densitity at 50 km radius is colinear witht the other variables and is dropped 
@@ -200,7 +205,7 @@ Study_sim <- create_vcv(PREDICTS_abundance, level = "SS")
 #1. fit model with no phylogeny in error term 
 
 
-test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density1k  + Road_Density50k +
+test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k  + RD50k + CNTRLlogHPD +
                    (1|SS) + (1|SSB) + (1 + LUI|SS), data = PREDICTS_site)
 
 
@@ -281,14 +286,14 @@ poolr::fisher(significance$significance)
 # With this we can proceed with modelling using GLMMs as opposed to PGLMMs 
 ###################################
 
-Rao_Model_1 <- lmer(Unbias_Rao ~ LUI+ logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_1 <- lmer(Unbias_Rao ~ LUI+ logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB), data = PREDICTS_site)
 
 summary(Rao_Model_1)
 
-Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                                       LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
@@ -298,57 +303,58 @@ summary(Rao_Model_1b)
 
 ### adding random slopes 1) LUI within study 
 
-Rao_Model_2 <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_2 <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (1 + LUI|SS), data = PREDICTS_site)
 
 summary(Rao_Model_2)
 
-Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_2b)
 
 #2) logHPD within study 
 
-Rao_Model_3 <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_3 <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (1 + logHPD|SS), data = PREDICTS_site)
 
 summary(Rao_Model_3)
 
-Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
+Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_3b)
 
 #3) Road Density_1km within study  
 
-Rao_Model_4 <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
-                      (1|SS) + (1|SSB) + (1 + Road_Density1k|SS), data = PREDICTS_site)
+Rao_Model_4 <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (1 + RD1k|SS), data = PREDICTS_site)
 
 summary(Rao_Model_4)
 
-Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
-                      (1|SS) + (1|SSB) + (Road_Density1k|SS), data = PREDICTS_site, bayes = TRUE)
+Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_4b)
 
-# 4) Road_Density50km within study 
+# 4) RD50km within study 
 
-Rao_Model_5 <- lmer(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
-                      (1|SS) + (1|SSB) + (1 + Road_Density50k|SS), data = PREDICTS_site)
+Rao_Model_5 <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (1 + RD50k|SS), data = PREDICTS_site)
 
 summary(Rao_Model_5)
 
-Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k + LUI:Road_Density50k +
-                      (1|SS) + (1|SSB) + (Road_Density50k|SS), data = PREDICTS_site, bayes = TRUE)
+
+Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                      LUI:logHPD + LUI:RD1k + LUI:RD50k +
+                      (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 summary(Rao_Model_5b)
 
@@ -365,104 +371,148 @@ Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 =
 ### Model 3 gives the best result which has logHPD as a random slope within study 
 ## so now to test the best fixed effect structure
 
-car::Anova(Rao_Model_3, type = "III") ## desnity of roads 50k is the least significant interaction so will test its exclusion
+car::Anova(Rao_Model_1, type = "III") ## desnity of roads 50k is the least significant interaction so will test its exclusion
 
 
 ### GLMM fails to converge removing the interaction between Road_density50k and landuse so I will continue with Bayes GLMM (INLA)
 
-Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                      LUI:logHPD + LUI:Road_Density1k +
-                      (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
+#### Remove each interaction to see if thsis improves the model at all. 
 
-summary(Rao_Model_6b)
+#LUI:RD50k
 
-
-Rao_Model_6b$DIC - Rao_Model_3b$DIC  ## DIC decreased by 10 in reduced model so is carried forward
-
-### can try removing the Road_Density50k fixed effect 
-
-Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k +
-                                       LUI:logHPD + LUI:Road_Density1k +
-                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_7b)
-
-Rao_Model_7b$DIC - Rao_Model_6b$DIC ### DIC is only reduced by 1.2 so it has not significantly improved the model fit so the previous model is retained
-
-### Can try removing the interaction between road_density 1k and land use 
-
-Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k + Road_Density50k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_8b)
-
-Rao_Model_8b$DIC - Rao_Model_6b$DIC ### DIC decreases by 15 thereofre the reduced model is retained 
-
-### try removing Road Density 50km fixed effect again
-
-Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_9b)
-
-Rao_Model_9b$DIC - Rao_Model_8b$DIC ## removiong the fixed effect doesn;t improve the model sufficiently 
+Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD1k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-#### try fixed effect of road Density 1km
 
-Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density50k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
+#LUI:RD1k
 
-summary(Rao_Model_10b)
-
-Rao_Model_10b$DIC - Rao_Model_8b$DIC ##### DIC increases the model is not best 
+Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD50k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-### try removing the interaction between LUI and logHPFD
+# LUI:logHPD
 
-Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density50k + Road_Density1k +
-                                        (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_11b)
-
-Rao_Model_11b$DIC - Rao_Model_8b$DIC ##### DIC is reduced by 15 so the model carried forward 
-
-### try removing the fixed effects again
-
-Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density1k +
-                                        (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_12b)
-
-Rao_Model_12b$DIC - Rao_Model_11b$DIC ###
+Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                                       LUI:RD50k + LUI:RD1k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
-Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + Road_Density50k +
-                                        (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_13b)
-
-Rao_Model_13b$DIC - Rao_Model_11b$DIC ###
 
 
-Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + Road_Density1k + Road_Density50k +
-                                        (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_14b)
-
-Rao_Model_14b$DIC - Rao_Model_11b$DIC ###
-
-##### none of these reduce the model DIC sufficiently so the best model is Rao_Model 11 
-
-summary(Rao_Model_11b)
+Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
+                                RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
+                                logHPD = Rao_Model_8b$DIC - Rao_Model_1b$DIC)   
 
 
-test <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + Road_Density50k + Road_Density1k +
-                                        (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
-summary(test)
+### Model improves the most when I removed the interaction between LUI:RD1k
+
+### Next round of removals -- 
+
+## fixed effect RD1k
+
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD50k +
+                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+
+# LUI:RD50k
+
+Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+                                        LUI:logHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+# LUI:logHPD
+
+Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+                                        LUI:RD50k +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+
+
+Model_differences <- data.frame(RD1k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
+                                RD50k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
+                                logHPD = Rao_Model_11b$DIC - Rao_Model_7b$DIC)   
+
+Model_differences
+
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 10b is best 
+
+## RD50k fixed
+
+Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
+                                        LUI:logHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+### RD1k fixed
+
+Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
+                                        LUI:logHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+#### LUI:logHPD
+
+
+Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+Model_differences <- data.frame(RD50k = Rao_Model_12b$DIC - Rao_Model_10b$DIC,
+                                RD1k = Rao_Model_13b$DIC - Rao_Model_10b$DIC,
+                                logHPD = Rao_Model_14b$DIC - Rao_Model_10b$DIC)   
+
+Model_differences
+
+
+#### Model DIC is reduced wehn removing the interaction between LUI:logHPD and is increased in the other cases so model 14 is carried forward.
+
+#### RD50k
+
+
+Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+#### RD1k
+
+Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k + CNTRLlogHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+### logHPD
+
+
+Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k + CNTRLlogHPD +
+                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+
+
+
+
+Model_differences <- data.frame(RD50k = Rao_Model_15b$DIC - Rao_Model_14b$DIC,
+                                RD1k = Rao_Model_16b$DIC - Rao_Model_14b$DIC,
+                                logHPD = Rao_Model_17b$DIC - Rao_Model_14b$DIC)  
+
+####
+
+
+Model_differences
+
+### the model wasn't improved with the removal of any of the fixed effects therefore the best model is Model_14b
 
    #### fcuntion to r=visualise the residuals from the PGLMM and check whether they are normally distributed
 
@@ -499,16 +549,25 @@ summary(test)
      unname(res)
    }
 
-   resid_check <- residuals.communityPGLMM(Rao_Model_11b)
+   resid_check <- residuals.communityPGLMM(Rao_Model_14b)
 plot(resid_check)   
 hist(resid_check)
 
-library(car)
 
+qqPlot(resid_check)
+### looking at the residuals it seems that there are some influential points that are caused by flocks of birds dominating the site in terms 
+## or relative abundance resulting in very low estimates of functional diversity. Because these values are true values we want to still include
+### them in the model but we would like to down-weight their contribution to the model therefore I am going to perform a Robustlmm with 
+## the final selected model 
 
-qqPlot(PREDICTS_site$Unbias_Rao)
+Robust_mod <- rlmer(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+                      (1|SS) + (1|SSB), data = PREDICTS_site)
 
-lala <- PREDICTS_abundance %>% filter(SSBS == "GN1_2010__Hvenegaard 1 14 117")
+summary(Robust_mod)
+summary(Rao_Model_14b)
+
+plot(Robust_mod)
+
 ###### so lets have a look at whats going on.
 
 utils::sessionInfo()

@@ -596,6 +596,8 @@ write_rds(file = "Outputs/Functional_Overlap_data.rds", Overlap_data)
 ###Human Population Density
 ###########################
 
+rm(list = ls())
+
 PREDICTS_Site_Rao <- readRDS("Outputs/PREDICTS_Site_Rao.rds")
 Overlap_data <- readRDS("Outputs/Functional_Overlap_data.rds")
 

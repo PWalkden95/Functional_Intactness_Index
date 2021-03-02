@@ -38,6 +38,7 @@ require(motmot)
 require(lme4)
 require(poolr)
 require(car)
+require(robustlmm)
 ```
 
 
@@ -274,7 +275,7 @@ Study_sim <- create_vcv(PREDICTS_abundance, level = "SS")
 #1. fit model with no phylogeny in error term 
 
 
-test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k  + RD50k +
+test_mod <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k  + RD50k + CNTRLlogHPD +
                    (1|SS) + (1|SSB) + (1 + LUI|SS), data = PREDICTS_site)
 
 
@@ -364,7 +365,7 @@ PREDICTS_site <- PREDICTS_site %>% droplevels()
 
 
 
-Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -376,7 +377,7 @@ Rao_Model_1b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
 ### adding random slopes 1) LUI within study 
 
 
-Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
 
@@ -385,7 +386,7 @@ Rao_Model_2b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
 
 
 
-Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
 
@@ -393,7 +394,7 @@ Rao_Model_3b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
 #3) Road Density_1km within study  
 
 
-Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site, bayes = TRUE)
 
@@ -401,7 +402,7 @@ Rao_Model_4b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
 # 4) RD50km within study 
 
 
-Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_5b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                       LUI:logHPD + LUI:RD1k + LUI:RD50k +
                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
@@ -423,7 +424,7 @@ Next to identify the optimal fixed effect structure I removed both interactions 
 
 #LUI:RD50k
 
-Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -431,14 +432,14 @@ Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
 
 #LUI:RD1k
 
-Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 # LUI:logHPD
 
-Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:RD50k + LUI:RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -453,7 +454,7 @@ Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
 
 ## RD1k fixed
 
-Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -462,7 +463,7 @@ Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
 
 # LUI:RD50k
 
-Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
+Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
                                        LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -470,7 +471,7 @@ Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k 
 
 # LUI:logHPD
 
-Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
+Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
                                         LUI:RD50k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -487,7 +488,7 @@ Model_differences
 
 ## RD50k fixed
 
-Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
+Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
                                        LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -495,7 +496,7 @@ Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
 
 ### RD1k fixed
 
-Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
+Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
                                        LUI:logHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
@@ -504,7 +505,7 @@ Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k +
 #### LUI:logHPD
 
 
-Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k +
+Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD + 
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
@@ -519,14 +520,14 @@ Model_differences
 #### RD50k
 
 
-Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k +
+Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 
 #### RD1k
 
-Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k +
+Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k + CNTRLlogHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
@@ -534,7 +535,7 @@ Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k +
 ### logHPD
 
 
-Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k +
+Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k + CNTRLlogHPD +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
@@ -601,6 +602,16 @@ qqline(Resid_check)
 
 write_rds(file = "Outputs/Rao_model.rds", Rao_Model_14b)
 ```
+
+## Robust estimates
+
+looking at the residuals it seems that there are some influential points that are caused by flocks of birds dominating the site in terms or relative abundance resulting in very low estimates of functional diversity. Because these values are true values we want to still include them in the model but we would like to down-weight their contribution to the model therefore I am going to perform a Robustlmm with the final selected model 
+
+```{r}
+Robust_mod <- rlmer(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+                      (1|SS) + (1|SSB), data = PREDICTS_site)
+```
+
 ### Rao_Model_14b
 
 ```{r}
