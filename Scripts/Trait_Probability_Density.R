@@ -14,27 +14,32 @@ require(foreach)
 #### Load in the relevant datasets that will be collated to get all relevant information for FII calculations
 
 
-Jetz_Traits <- read.csv("Datasets/GBD/GBD_BiometricsRaw_combined_2020_Dec_07.csv")
-PREDICTS_Aves_Am <- readRDS("Functional_Intactness_Index/Outputs/PREDICTS_Americas_Aves.rds")
+Jetz_Traits <- read.csv("../Datasets/GBD/GBD_BiometricsRaw_combined_2020_Dec_07.csv")
+PREDICTS_Aves_Am <- readRDS("../Datasets/PREDICTS/PREDICTS_Americas_Aves.rds")
 
 
 colnames(Jetz_Traits)[6] <- "Jetz_Name"
+
 
 #### Subset the PREDICTS database to just include the Class Aves resolved to the species level and add in species level
 #### Trophic niche and morphometric trait measurements 
 
 
 
-Jetz_Species <- PREDICTS_Aves_Am %>% filter(Diversity_metric == "abundance" ) %>%distinct(Jetz_Name)
+Jetz_Species <- PREDICTS_Aves_Am %>% filter(Diversity_metric == "abundance" ) %>% distinct(Jetz_Name)
 
 
-Jetz_Traits_Am <- Jetz_Traits %>% filter(Jetz_Name %in% Jetz_Species$Jetz_Name) %>% 
+Jetz_Traits <- Jetz_Traits %>% dplyr::filter(Jetz_Name %in% Jetz_Species$Jetz_Name) %>% 
   dplyr::select(Jetz_Name,Bill_TotalCulmen,Bill_Depth,Bill_Nares,Bill_Width,
                 Wing_Chord,Secondary1,Tail_Length,Tarsus_Length) %>% na.omit() %>% group_by(Jetz_Name) %>%
-  dplyr::mutate(num = n()) %>% ungroup() %>% filter(num >= 4)
+  dplyr::mutate(num = n()) %>% ungroup()
 
 
-PCA_Data <- data.frame(Jetz_Name = Jetz_Traits_Am[,1], scale(log(Jetz_Traits_Am[,c(2:9)])))
+
+
+
+
+PCA_Data <- data.frame(Jetz_Name = Jetz_Traits[,1], scale(log(Jetz_Traits[,c(2:9)])))
 
 
 
@@ -74,12 +79,21 @@ for(col in colnames(Full_PC_Scores[,-1])){
   Full_PC_Scores[,col] <- Full_PC_Scores[,col]/max(Full_PC_Scores[,col])
 }
 
-write_rds(file = "Functional_Intactness_Index/Outputs/Full_PC_scores.rds", Full_PC_Scores)
+write_rds(file = "Outputs/Full_PC_scores.rds", Full_PC_Scores)
+
+################# Fewer than 4 triats
+
+Jetz_Traits_Am <- Jetz_Traits %>% filter(num >= 4) %>% pull(Jetz_Name) %>% unique()
+
+Jetz_Traits_under <- Jetz_Traits %>% filter(num < 4 & num != 1) %>% pull(Jetz_Name) %>% unique()
+single_Jetz_traits <- Jetz_Traits %>% filter(num == 1) %>% pull(Jetz_Name) %>% unique()
 
 
 
 
-Similarity_data <- data.frame(test_2) %>% filter(Diversity_metric == "abundance" & Effort_Corrected_Measurement > 0) %>% filter(Jetz_Name %in% Jetz_Traits_Am$Jetz_Name) %>%
+Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% filter(Diversity_metric == "abundance" & Effort_Corrected_Measurement > 0) %>%
+
+filter(Jetz_Name %in% c(Jetz_Traits_Am, Jetz_Traits_under, single_Jetz_traits)) %>%
   
   dplyr::group_by(SSBS,Jetz_Name) %>% dplyr::mutate(SpeciesSiteAbundance = sum(Effort_Corrected_Measurement), n_spp = n()) %>%
   
@@ -101,46 +115,8 @@ Similarity_data <- data.frame(test_2) %>% filter(Diversity_metric == "abundance"
   data.frame()
 
 
-write_rds(Similarity_data, file = "Functional_Intactness_Index/Outputs/abundance_similarity_data.rds")
+write_rds(Similarity_data, file = "Outputs/abundance_similarity_data.rds")
 
-
-test <- PREDICTS_Aves_Am %>% filter(SS == "DL1_2011__Latta 2")
-test_2 <- PREDICTS_Aves_Am %>% filter(SS == "SE1_2011__Rosselli 1")
-
-remove_dupl_comparisons <- function(data){
-  
-  data$drop <- NA
-  data$comparison <- paste(data$site1,data$site2, sep = "_")
-  data[1,"drop"] <- FALSE
-  
-  
-  if(NROW(data) > 1){
-  for(i in 2:NROW(data)){
-    
-    site1 <- data[i,"site1"]
-    site2 <- data[i,"site2"]
-    
-    match_1 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site1))
-    match_2 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site2))
-    
-    if(any(match_1 %in% match_2)){
-      data[i,"drop"] <- TRUE
-    } else {
-      data[i,"drop"] <- FALSE
-    }
-    
-  }
-    }
-  
-  if(any(data$drop)){
-    data <- data[-which(data$drop == TRUE & data$Contrast == "Primary_Minimal use-Primary_Minimal use"),-which(colnames(data) == "comparison" | colnames(data) == "drop")]
-  } else {
-    data <- data[,-which(colnames(data) == "comparison" | colnames(data) == "drop")]
-  }
-  
-  
-  return(data)
-}
 
 
 
@@ -186,14 +162,18 @@ site_comparisons <- expand.grid(Primary_sites, all_sites) %>%
   left_join(LatLong, by = c("site2" = "SSBS")) %>% dplyr::rename(site2Lat = Latitude, site2Long = Longitude) %>%
   left_join(LandUse, by = c("site1" = "SSBS")) %>% dplyr::rename(site1LUI = LandUse_Intensity) %>%
   left_join(LandUse, by = c("site2" = "SSBS")) %>% dplyr::rename(site2LUI = LandUse_Intensity) %>%
-  dplyr::left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site1" = "SSBS")) %>%
+  dplyr::left_join(distinct(Similarity_data[,c("SSBS","Site_spp", "Rescaled_Sampling_Effort")]), by = c("site1" = "SSBS")) %>%
   dplyr::rename(site1_spp = Site_spp) %>%
-  left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site2" = "SSBS")) %>%
+  dplyr::rename(site1_sampling_effort = Rescaled_Sampling_Effort) %>%
+  left_join(distinct(Similarity_data[,c("SSBS","Site_spp","Rescaled_Sampling_Effort")]), by = c("site2" = "SSBS")) %>%
   dplyr::rename(site2_spp = Site_spp) %>%
-  dplyr::mutate(Contrast = paste(site1LUI,site2LUI, sep = "-"))
+  dplyr::rename(site2_sampling_effort = Rescaled_Sampling_Effort) %>%
+  dplyr::mutate(Contrast = paste(site1LUI,site2LUI, sep = "-")) %>%
+  filter(site1_sampling_effort == site2_sampling_effort)
 
 
-site_comparisons <- remove_dupl_comparisons(site_comparisons)
+  if(nrow(site_comparisons) != 0){
+
 
 
 ### calculate geographic distance between the sites 
@@ -213,8 +193,7 @@ study_data$SS <- study
 study_data$TPD_Overlap <- NA
 
 
-
-for(i in 1:NROW(site_comparisons)){
+for(i in 1:nrow(site_comparisons)){
   
   
   ##### get the species in both sites being compared 
@@ -229,9 +208,7 @@ for(i in 1:NROW(site_comparisons)){
   site2_spp <- Similarity_data %>% dplyr::filter(SSBS == site2) %>% dplyr::select(Jetz_Name, RelativeAbundance)
   
   
-species <-data.frame(Jetz_Name = unique(c(site1_spp$Jetz_Name,site2_spp$Jetz_Name)))
-
-Traits <- species %>% dplyr::left_join(Full_PC_Scores, by = "Jetz_Name")
+species <- data.frame(Jetz_Name = unique(c(site1_spp$Jetz_Name,site2_spp$Jetz_Name)))
 
 
 
@@ -240,15 +217,62 @@ trait_ranges <- list(c(min(Full_PC_Scores[,2]) -(0.1 * min(Full_PC_Scores[,2])),
                      c(min(Full_PC_Scores[,4]) -(0.1 * min(Full_PC_Scores[,4])),max(Full_PC_Scores[,4]) + (0.1 * max(Full_PC_Scores[,4]))))
 
 
+mean_TPD <- c()
+
+if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
+  under_spp <- species %>% filter(Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))
+  under_spp_traits <- under_spp %>% dplyr::left_join(Full_PC_Scores, by = "Jetz_Name")
+  
+  spp <- unique(under_spp_traits$Jetz_Name)
+  k <- spp[2]
+  means <- c()
+  sd <- c()
+  for(k in spp){
+  spp_mean <- data.frame(Jetz_Name = k)
+  spp_sd <- data.frame(Jetz_Name = k)
+  spp_data <- under_spp_traits %>% filter(Jetz_Name == k)
+    if(nrow(spp_data) == 1){
+      spp_mean <- spp_data
+      spp_sd <- cbind(spp_sd, Foraging.PCA =  c(0.5*sd(Full_PC_Scores[,2])),
+                      Loco.PCA =  c(0.5*sd(Full_PC_Scores[,3])), 
+                      Body.PCA =  c(0.5*sd(Full_PC_Scores[,3])))
+    } else{
+
+  for(j in 2:ncol(under_spp_traits)){
+  mean <-  mean(under_spp_traits[,j])
+  stan <-  sd(under_spp_traits[,j])
+  
+  spp_mean <- cbind(spp_mean,mean)
+  colnames(spp_mean)[j] <- colnames(under_spp_traits)[j]
+  spp_sd <- cbind(spp_sd, stan)
+  colnames(spp_sd)[j] <- colnames(under_spp_traits)[j]
+    }}
+  means <- rbind(means,spp_mean)
+  sd <- rbind(sd,spp_sd)
+  }
+  
+  
+  mean_TPD <- TPDsMean(species = spp, means = means[,c(2:4)], sds = sd[,c(2:4)], trait_ranges = trait_ranges, n_divisions = 61, alpha = 0.95 )
+}
+
+
+Traits <- species %>% dplyr::left_join(Full_PC_Scores, by = "Jetz_Name") %>% filter(Jetz_Name %in% Jetz_Traits_Am)
+
+species$Jetz_Name[which(!(species$Jetz_Name %in% unique(names(Trait_density$TPDs))))] 
 Trait_density <- TPDs(Traits[,1], Traits[,c(2:4)], trait_ranges = trait_ranges, n_divisions = 61, alpha = 0.95)
 
-
+if(!is.null(mean_TPD)){
+  Trait_density$TPDs <- c(mean_TPD$TPDs, Trait_density$TPDs)
+  Trait_density$data$species <- c(Trait_density$data$species, under_spp_traits$Jetz_Name)
+  Trait_density$data$traits <- rbind(Trait_density$data$traits, under_spp_traits[,c(2:4)])
+}
 
 
 Community <- species %>% dplyr::left_join(site1_spp, by = "Jetz_Name") %>%
   dplyr::rename(site1_abun = RelativeAbundance) %>%
   dplyr::left_join(site2_spp, by = "Jetz_Name") %>%
-  dplyr::rename(site2_abun = RelativeAbundance)
+  dplyr::rename(site2_abun = RelativeAbundance) %>%
+  dplyr::filter(Jetz_Name %in% c(Jetz_Traits_Am, Jetz_Traits_under, single_Jetz_traits))
 
 
 
@@ -259,7 +283,6 @@ rownames(Community) <- Community$Jetz_Name
 Community <- Community[,-1]
 
 Overlap <- TPDc(Trait_density, t(Community))
-
 
 
 TPDOverlap <- dissim(Overlap)
@@ -276,6 +299,7 @@ study_data[i, "TPD_Overlap"] <- 1 - TPDOverlap$communities$dissimilarity[2]
 
 study_data <- study_data
 
+}
 }
 
 registerDoSEQ()
@@ -301,6 +325,3 @@ TPD_data <- hyper_data %>% left_join(Overlap_data[,c("Comparison","TPD_Overlap")
 
 
 write_rds(file = "Outputs/Trait_Prob_den.rds", TPD_data)
-
-
-

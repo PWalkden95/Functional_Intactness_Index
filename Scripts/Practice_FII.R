@@ -21,10 +21,10 @@ require(lwgeom) ### ditto
 
 #### Load in the relevant datasets that will be collated to get all relevant information for FII calculations
 
-Forage <- readRDS("Datasets/GBD/Trophic_Foraging_Niche.rds")
-PREDICTS <- readRDS("Datasets/PREDICTS/diversity-2021-02-24-03-32-59.rds")
-PREDICTS_Taxonomy <- readRDS("Datasets/PREDICTS/PREDICTS_AVES_Updated_Taxonomy.rds")
-Jetz_Traits <- read.csv("Datasets/GBD/GBD_Jetz_averages_11_Nov_2020.csv")
+Forage <- readRDS("../Datasets/GBD/Trophic_Foraging_Niche.rds")
+PREDICTS <- readRDS("../Datasets/PREDICTS/diversity-2021-02-24-03-32-59.rds")
+PREDICTS_Taxonomy <- readRDS("../Datasets/PREDICTS/PREDICTS_AVES_Updated_Taxonomy.rds")
+Jetz_Traits <- read.csv("../Datasets/GBD/GBD_Jetz_averages_11_Nov_2020.csv")
 
 colnames(Jetz_Traits)[1] <- "Jetz_Name" 
 
@@ -113,7 +113,7 @@ PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>%
 
 ## Now the Biodiversity data is ready to be used 
 
-write_rds(PREDICTS_Aves_Am, "Functional_Intactness_Index/Outputs/PREDICTS_Americas_Aves.rds")
+write_rds(PREDICTS_Aves_Am, "../Datasets/PREDICTS/PREDICTS_Americas_Aves.rds")
 
 ### To be able to calculate our metric of functional diversity at the site level we need to have 
 ### abundance of each species in each site (rescaled), fucntional distances between PCAs of morphometric traits
@@ -188,7 +188,7 @@ for(col in colnames(PC_Scores[,-1])){
 }
 
 
-write_rds(file = "Functional_Intactness_Index/Outputs/PC_Scores.rds", PC_Scores)
+write_rds(file = "Outputs/PC_Scores.rds", PC_Scores)
 ###### To determine variation in dietary and foraging niches I performed an Principal Coordinate analysis
 
 PCoA_Data <- data.frame(PREDICTS_Aves_Am[,c(90:99)])
@@ -283,7 +283,7 @@ abundance_data <- PREDICTS_Aves_Am %>% dplyr::filter(Diversity_metric == "abunda
 write_rds(abundance_data, file = "Functional_Intactness_Index/Outputs/abundance_data.rds")
 
 
-morpho_traits <- readRDS("Functional_Intactness_Index/Outputs/PC_Scores.rds")
+morpho_traits <- readRDS("Outputs/PC_Scores.rds")
 
 #####################################################
 #### Function to calculate Rao's Q for each site ####
@@ -388,7 +388,7 @@ plot(Rao_data$Unbias ~ Rao_data$Bias)
 abline(a=0,b=1)
 ## save for modelling
 
-write_rds(PREDICTS_Site_Rao, file = "Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
+write_rds(PREDICTS_Site_Rao, file = "Outputs/PREDICTS_Site_Rao.rds")
 
 
 
@@ -416,23 +416,28 @@ write_rds(PREDICTS_Site_Rao, file = "Functional_Intactness_Index/Outputs/PREDICT
 ### Join trait values filter out species that are marked as absent from sites 
 
 
-Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% left_join(PC_Scores, by = "Jetz_Name") %>% filter(Effort_Corrected_Measurement > 0) %>%
+Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% filter(Effort_Corrected_Measurement > 0) %>%
+  
+  dplyr::group_by(SSBS,Jetz_Name) %>% dplyr::mutate(SpeciesSiteAbundance = sum(Effort_Corrected_Measurement), n_spp = n()) %>%
+  
+  filter(!duplicated(n_spp) | n_spp == 1) %>%
   
   ### calculating a hypervolume in 3 dimensions with fewer than 21 species on result in inaccurcies 
-  group_by(SSBS) %>% dplyr::mutate(Site_spp = n_distinct(Jetz_Name)) %>% filter(Site_spp > 21) %>% ungroup() %>%
+  group_by(SSBS) %>% dplyr::mutate(Site_spp = n_distinct(Jetz_Name),TotalSiteAbundance = sum(SpeciesSiteAbundance)) %>%
+  
+  filter(Site_spp > 21) %>% ungroup() %>%
+  
+  group_by(SS) %>% dplyr::mutate(n_primary_min = sum(LandUse_Intensity == "Primary_Minimal use" ), n_sites_within_studies = n_distinct(SSBS)) %>% ungroup() %>%
+  
+  filter(n_primary_min > 0 ) %>%  filter(n_sites_within_studies > 1) %>% dplyr::mutate(RelativeAbundance = SpeciesSiteAbundance/TotalSiteAbundance) %>%
   
   ## how many studies have at least one site of primary minimal for comparisons to be made and make sure the sites have more than a single site. 
-  
-  group_by(SS) %>% dplyr::mutate(n_primary_min = sum(LandUse_Intensity == "Primary_Minimal use" ), n_sites_within_studies = n_distinct(SSBS)) %>%
-  
-  
-  ungroup() %>% filter(n_primary_min > 0 ) %>%  filter(n_sites_within_studies > 1) %>%
   
   droplevels() %>%
   
   data.frame()
 
-write_rds(Similarity_data, file = "Functional_Intactness_Index/Outputs/similarity_data.rds")
+write_rds(Similarity_data, file = "Outputs/similarity_data.rds")
 
 
 
@@ -443,50 +448,13 @@ write_rds(Similarity_data, file = "Functional_Intactness_Index/Outputs/similarit
 
 ### With studies with multiple pri-min sites it compares with each other twice -- prim1 v prim2 & prim2 v prim 1 etc etc should only really compare once therefore i have create a function that will remove the duplicated comparisons.
 
-remove_dupl_comparisons <- function(data){
-  
-  data$drop <- NA
-  data$comparison <- paste(data$site1,data$site2, sep = "_")
-  data[1,"drop"] <- FALSE
-  
-  
-  if(NROW(data) > 1){
-    for(i in 2:NROW(data)){
-      
-      site1 <- data[i,"site1"]
-      site2 <- data[i,"site2"]
-      
-      match_1 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site1))
-      match_2 <- as.numeric(grep(data[1:i-1,"comparison"], pattern = site2))
-      
-      if(any(match_1 %in% match_2)){
-        data[i,"drop"] <- TRUE
-      } else {
-        data[i,"drop"] <- FALSE
-      }
-      
-    }
-  }
-  
-  if(any(data$drop)){
-    data <- data[-which(data$drop == TRUE & data$Contrast == "Primary_Minimal use-Primary_Minimal use"),-which(colnames(data) == "comparison" | colnames(data) == "drop")]
-  } else {
-    data <- data[,-which(colnames(data) == "comparison" | colnames(data) == "drop")]
-  }
-  
-  
-  return(data)
-}
-
-
 ### What studies do we have in the dataset 
 
 studies <- levels(Similarity_data$SS) 
 
 #### empty data frame for results to go into 
 
-
-
+study <- studies[2]
 
 
 registerDoParallel(cores = 4)
@@ -531,14 +499,19 @@ Overlap_data <- foreach(study = studies,
                             left_join(LatLong, by = c("site2" = "SSBS")) %>% dplyr::rename(site2Lat = Latitude, site2Long = Longitude) %>%
                             left_join(LandUse, by = c("site1" = "SSBS")) %>% dplyr::rename(site1LUI = LandUse_Intensity) %>%
                             left_join(LandUse, by = c("site2" = "SSBS")) %>% dplyr::rename(site2LUI = LandUse_Intensity) %>%
-                            dplyr::left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site1" = "SSBS")) %>%
+                            dplyr::left_join(distinct(Similarity_data[,c("SSBS","Site_spp", "Rescaled_Sampling_Effort")]), by = c("site1" = "SSBS")) %>%
                             dplyr::rename(site1_spp = Site_spp) %>%
-                            left_join(distinct(Similarity_data[,c("SSBS","Site_spp")]), by = c("site2" = "SSBS")) %>%
+                            dplyr::rename(site1_sampling_effort = Rescaled_Sampling_Effort) %>%
+                            left_join(distinct(Similarity_data[,c("SSBS","Site_spp","Rescaled_Sampling_Effort")]), by = c("site2" = "SSBS")) %>%
                             dplyr::rename(site2_spp = Site_spp) %>%
-                            dplyr::mutate(Contrast = paste(site1LUI,site2LUI, sep = "-"))
+                            dplyr::rename(site2_sampling_effort = Rescaled_Sampling_Effort) %>%
+                            dplyr::mutate(Contrast = paste(site1LUI,site2LUI, sep = "-")) %>%
+                            filter(site1_sampling_effort == site2_sampling_effort)
                           
+                          if(nrow(site_comparisons) != 0 ){
+                      
                           
-                          site_comparisons <- remove_dupl_comparisons(site_comparisons)
+
                           
                           
                           ### calculate geographic distance between the sites 
@@ -580,7 +553,7 @@ Overlap_data <- foreach(study = studies,
                             ### calculate support vector machine and minimum convex hull hypervolumes 
                             
                             hypersvm_1 <- hypervolume(site1_data, method = "svm")
-                            convex_1 <- expectation_convex(site1_data, check.memory = FALSE)
+                            #convex_1 <- expectation_convex(site1_data, check.memory = FALSE)
                             
                             
                             ### site 2
@@ -606,19 +579,16 @@ Overlap_data <- foreach(study = studies,
                             
                           }
                           
-                          Overlap_data <- rbind(Overlap_data,study_data)
-                          
-                          
+                          return(study_data)
+                          }
                           
                         }
 
 
 
-write_rds(file = "Functional_Intactness_Index/Outputs/Functional_Overlap_data.rds", Overlap_data)
-
-
 registerDoSEQ()
 
+write_rds(file = "Outputs/Functional_Overlap_data.rds", Overlap_data)
 
 
 
@@ -626,12 +596,12 @@ registerDoSEQ()
 ###Human Population Density
 ###########################
 
-PREDICTS_Site_Rao <- readRDS("Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
-Overlap_data <- readRDS("Functional_Intactness_Index/Outputs/Functional_Overlap_data.rds")
+PREDICTS_Site_Rao <- readRDS("Outputs/PREDICTS_Site_Rao.rds")
+Overlap_data <- readRDS("Outputs/Functional_Overlap_data.rds")
 
 
 
-hpd <- raster("Datasets/PREDICTS_variables/gpw_v4_population_density_adjusted_to_2015_unwpp_country_totals_rev11_2015_2pt5_min.tif")
+hpd <- raster("../Datasets/PREDICTS_variables/gpw_v4_population_density_adjusted_to_2015_unwpp_country_totals_rev11_2015_2pt5_min.tif")
 
 
 ### calculate human population density for Functional diversity sites 
@@ -640,10 +610,14 @@ hpd_values <- raster::extract(hpd,PREDICTS_Site_Rao[,c("Longitude","Latitude")])
 
 ## human population density trandformed with the log +1 transformation
 PREDICTS_Site_Rao$logHPD <- log(hpd_values + 1) 
-
+PREDICTS_Site_Rao <- PREDICTS_Site_Rao %>% group_by(SS) %>% dplyr::mutate(CNTRLlogHPD = mean(logHPD)) %>% ungroup()
 
 
 ### calculate for functional similarity/overlap data
+control_hpd <- PREDICTS_Aves_Am %>% dplyr::distinct(SS,SSBS,Longitude,Latitude)
+hpd_values_control <- raster::extract(hpd,control_hpd[,c("Longitude","Latitude")])
+control_hpd$HPD <- log(hpd_values_control + 1)
+control_hpd <- control_hpd  %>% group_by(SS) %>% dplyr::mutate(CNTRLlogHPD = mean(HPD))
 
 hpd_values_site1 <- raster::extract(hpd,Overlap_data[,c("site1Long","site1Lat")])
 hpd_values_site2 <- raster::extract(hpd,Overlap_data[,c("site2Long","site2Lat")])
@@ -652,18 +626,18 @@ Overlap_data$S1logHPD <- log(hpd_values_site1 + 1)
 Overlap_data$S2logHPD <- log(hpd_values_site2 + 1)
 
 Overlap_data$logHPDdiff <- Overlap_data$S2logHPD - Overlap_data$S1logHPD
-
+Overlap_data <- Overlap_data %>% dplyr::left_join(unique(control_hpd[,c("SS","CNTRLlogHPD")], by = "SS"))
 
 ########################
 #Environmental distance
 ########################
 
 
-Bioclim_5 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_5.tif")
-Bioclim_6 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_6.tif")
-Bioclim_13 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_13.tif")
-Bioclim_14 <- raster("Datasets/Environmental_Variables/wc2.1_30s_bio_14.tif")
-Elevation <- raster("Datasets/Environmental_Variables/wc2.1_30s_elev.tif")
+Bioclim_5 <- raster("../Datasets/Environmental_Variables/wc2.1_30s_bio_5.tif")
+Bioclim_6 <- raster("../Datasets/Environmental_Variables/wc2.1_30s_bio_6.tif")
+Bioclim_13 <- raster("../Datasets/Environmental_Variables/wc2.1_30s_bio_13.tif")
+Bioclim_14 <- raster("../Datasets/Environmental_Variables/wc2.1_30s_bio_14.tif")
+Elevation <- raster("../Datasets/Environmental_Variables/wc2.1_30s_elev.tif")
 
 
 ### we only have to calculate the environmental distance when comparing two sites.
@@ -693,7 +667,7 @@ Overlap_data$env_distance <- environ_dist
 ########################
 
 ### load in the roads shape file for the americas
-Roads <- st_read("Datasets/PREDICTS_variables/groads-v1-americas-shp/groads-v1-americas-shp/gROADS-v1-americas.shp")
+Roads <- st_read("../Datasets/PREDICTS_variables/groads-v1-americas-shp/groads-v1-americas-shp/gROADS-v1-americas.shp")
 ### combine into a single shapefile
 Roads <- st_combine(Roads)
 ### transform to be projected on the mercator projection that deals in meters rather than latlong 
@@ -773,17 +747,18 @@ Overlap_data <- Overlap_data %>%
   dplyr::rename(S2RD1K = density_1km, S2RD50K = density_50km)
 
 
-write_rds(file = "Datasets/PREDICTS_variables/Road_densities1_and_50k.rds", road_densities)
+write_rds(file = "../Datasets/PREDICTS_variables/Road_densities1_and_50k.rds", road_densities)
 
 
 
 
-write_rds(file = "Functional_Intactness_Index/Outputs/Functional_Overlap_data.rds", Overlap_data)
-write_rds(file = "Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds", PREDICTS_Site_Rao)
+write_rds(file = "Outputs/Functional_Overlap_data.rds", Overlap_data)
+write_rds(file = "Outputs/PREDICTS_Site_Rao.rds", PREDICTS_Site_Rao)
 
 
-
-
+##############
+##############
+#############
 rao_diversity_2 <- function (comm, traits = NULL, phylodist = NULL, checkdata = TRUE, 
           ord = "metric", put.together = NULL, standardize = TRUE, 
           ...) 

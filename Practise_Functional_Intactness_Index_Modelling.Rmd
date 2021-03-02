@@ -613,9 +613,11 @@ Running the model selection framework with the "biased" Rao yielded similar resu
 
 # **1.2 Modelling: Functional Similarity/Overlap (GLMM)**
 
-To assess the impact of landuse change and other pressures on functional similarity, caluclated using trait probability density hypervolumes in trait space I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
+To assess the impact of landuse change and other pressures on functional similarity, calculated as the overlap between trait probability density hypervolumes in trait space I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
 
-To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. To determine the best fixed effect structure is more difficult however, as the comparisons are not-independent of each other as a single primary minimal site will being compared to multiple of other sites, therefore traditional likelihood ratio tests will not best suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model.
+To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. To determine the best fixed effect structure is more difficult however, as the comparisons are not-independent of each other as a single primary minimal site will being compared to multiple of other sites, therefore traditional likelihood ratio tests will not be suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model. 
+
+As the overlap score will be bound between 0 and 1 as it is the proportion of overlap between two communities I logit transformed the values to extend the tails of the distribution. 
 
 
 ```{r load in data, eval=FALSE, echo=FALSE}
@@ -694,129 +696,112 @@ corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2
 
 ```{r Overlap Modeling, eval = FALSE , echo=FALSE}
 
+
 ################################
 ##### Modelling ################
 ################################
 
 
 
-Model_1 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
+Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  (1|SS),
+                data = TPD_data)
 
-summary(Model_1)
-
-AIC(Model_1)
 
 #### random slopes
 
 ## logdist
 
-Model_2 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+Model_2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logdist|SS),
-                data = Overlap_data, weights = min_site_spp )
-
-summary(Model_2)
-
-AIC(Model_2)
+                data = TPD_data )
 
 ## rt3env
 
-Model_3 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + rt3env|SS),
-                data = Overlap_data, weights = min_site_spp )
-
-summary(Model_3)
-
-AIC(Model_3)
+                data = TPD_data)
 
 
 ## logHPDdiff
 
-Model_4 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logHPDdiff|SS),
-                data = Overlap_data, weights = min_site_spp )
-
-summary(Model_4)
-
-AIC(Model_4)
+                data = TPD_data )
 
 ## sqrtS2RD1K
 
-Model_5 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
-                   (1|SS) + (1 + sqrtS2RD1K|SS),
-                data = Overlap_data, weights = min_site_spp )
+Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  (1|SS) + (1 + sqrtS2RD1K|SS),
+                data = TPD_data)
 
-summary(Model_5)
 
-AIC(Model_5)
+## S2logHPD
 
-## sqrtS2RD50K
+Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  (1|SS) + (1 + S2logHPD|SS),
+                data = TPD_data )
 
-Model_6 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
-                  (1|SS) + (1 + sqrtS2RD50K|SS),
-                data = Overlap_data, weights = min_site_spp )
-
-summary(Model_6)
-
-AIC(Model_6)
 
 ## RoadDdiff1k
 
-Model_7 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env + Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env + Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD1Kdiff|SS),
-                data = Overlap_data, weights = min_site_spp )
+                data = TPD_data)
 
-summary(Model_7)
-
-AIC(Model_7)
 
 ## RoadDdiff50k
 
-Model_8 <- lmer(logitOver ~ Contrast + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff + Contrast:RD50Kdiff +
+Model_8 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD50Kdiff|SS),
-                data = Overlap_data, weights = min_site_spp )
+                data = TPD_data)
 
-summary(Model_8)
 
-AIC(Model_8)
+
+## Cont 
+
+Model_9 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  (1|SS) + (1 + Cont|SS),
+                data = TPD_data)
 
 
 
 MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
                       Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
-                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8))
+                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8), Mod9 = AIC(Model_9))
 
 
 
 ```
 
-
-Model 1 seems to have the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
+Model 2 and 3 have the lowest AIC scores, however they both failed to converge therefore, I will proceed with Model 1 which is the next model with the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
 
 
 ```{r permuted data, eval = FALSE , echo=FALSE}
@@ -850,8 +835,8 @@ Permuted_model_simplification <- function(data, model1, model2){
   
   for(i in 1:length(data)){
   
-  mod1 <- lmer(model1@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
-  mod2 <- lmer(model2@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
+  mod1 <- lmer(model1@call, data = data[[i]], REML = FALSE)
+  mod2 <- lmer(model2@call, data = data[[i]], REML = FALSE)
   
   LRT <- anova(mod1,mod2)
   LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]

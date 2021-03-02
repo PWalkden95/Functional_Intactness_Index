@@ -10,12 +10,11 @@ require(ggResidpanel)
 #### Load in Similarity data
 
 
-Similarity_data <- readRDS("Functional_Intactness_Index/Outputs/similarity_data.rds")
-TPD_data <- readRDS("Functional_Intactness_Index/Outputs/Trait_Prob_den.rds")
+Similarity_data <- readRDS("Outputs/similarity_data.rds")
+TPD_data <- readRDS("Outputs/Trait_Prob_den.rds")
 
 
 ### Want to work out human population density at 
-
 
 TPD_data <- TPD_data %>% dplyr::mutate(logitOver = car::logit(TPD_Overlap, adjust = 0.001, percents = FALSE)) %>%
   dplyr::mutate(logdist = log(distance + 1),
@@ -58,6 +57,7 @@ TPD_data$sqrtS2RD1K <- scale(TPD_data$sqrtS2RD1K)
 TPD_data$sqrtS2RD50K <- scale(TPD_data$sqrtS2RD50K)
 TPD_data$RD1Kdiff <- scale(TPD_data$RD1Kdiff)
 TPD_data$RD50Kdiff <- scale(TPD_data$RD50Kdiff)
+TPD_data$CNTRLlogHPD <- scale(TPD_data$CNTRLlogHPD)
 
 
 source("https://highstat.com/Books/Book2/HighstatLibV10.R")
@@ -78,8 +78,8 @@ corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2
 
 
 Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS),
                 data = TPD_data)
@@ -93,8 +93,8 @@ AIC(Model_1)
 ## logdist
 
 Model_2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logdist|SS),
                 data = TPD_data )
@@ -106,8 +106,8 @@ AIC(Model_2)
 ## rt3env
 
 Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + rt3env|SS),
                 data = TPD_data)
@@ -120,8 +120,8 @@ AIC(Model_3)
 ## logHPDdiff
 
 Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logHPDdiff|SS),
                 data = TPD_data )
@@ -133,8 +133,8 @@ AIC(Model_4)
 ## sqrtS2RD1K
 
 Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + sqrtS2RD1K|SS),
                 data = TPD_data)
@@ -146,8 +146,8 @@ AIC(Model_5)
 ## S2logHPD
 
 Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + S2logHPD|SS),
                 data = TPD_data )
@@ -159,8 +159,8 @@ AIC(Model_6)
 ## RoadDdiff1k
 
 Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env + Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD1Kdiff|SS),
                 data = TPD_data)
@@ -172,8 +172,8 @@ AIC(Model_7)
 ## RoadDdiff50k
 
 Model_8 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD50Kdiff|SS),
                 data = TPD_data)
@@ -186,8 +186,8 @@ AIC(Model_8)
 ## Cont 
 
 Model_9 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
                   Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + Cont|SS),
                 data = TPD_data)
@@ -196,10 +196,24 @@ summary(Model_9)
 
 AIC(Model_9)
 
+### sqrtS2RD50k
+
+Model_10 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  (1|SS) + (1 + sqrtS2RD50K|SS),
+                data = TPD_data)
+
+summary(Model_10)
+
+AIC(Model_10)
+
 
 MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
                       Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
-                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8), Mod9 = AIC(Model_9))
+                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8), Mod9 = AIC(Model_9),
+                      Mod10 = AIC(Model_10))
 
 
 
@@ -226,7 +240,7 @@ for(i in 1:1000){
   
 }
 
-#### function to generate the LR distribution across the 100 datasets
+#### function to generate the LR distribution across the 1000 datasets
 
 ##### Liklihood ratio function
 
@@ -236,8 +250,8 @@ Permuted_model_simplification <- function(data, model1, model2){
   
   for(i in 1:length(data)){
     
-    mod1 <- lmer(model1@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
-    mod2 <- lmer(model2@call, data = data[[i]], weights = min_site_spp, REML = FALSE)
+    mod1 <- lmer(model1@call, data = data[[i]], REML = FALSE)
+    mod2 <- lmer(model2@call, data = data[[i]], REML = FALSE)
     
     LRT <- anova(mod1,mod2)
     LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]
@@ -256,28 +270,126 @@ Permuted_model_simplification <- function(data, model1, model2){
 
 Anova(Model_1, type = "II")
 
-### with the lowest p-value we should remove the interaction between Contrast and S2/rd1K
+### Because there may be some colinearity issues in the explanatory variables it is not reliable to pick the term to remove in the simplification
+### using the highest p-value, therefore I will have to try removing all possibilities and proceeding with the model that imroves the most
 
-Model_10 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) ,
+###### int Cont:RD50Kdiff
+
+Model_sim1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
+                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff +
+                  (1|SS),
                 data = TPD_data)
 
-summary(Model_10)
+summary(Model_sim1)
 
-AIC(Model_10)
-
-
-Like_ratio <- anova(Model_1, Model_10)
+AIC(Model_sim1)
 
 
-LRT_dist1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_10)
+Like_ratio <- anova(Model_1, Model_sim1)
 
-ninety_five <- quantile(LRT_dist1,0.95)
 
-Like_ratio[2,"Chisq"] > ninety_five
+LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim1)
+
+percentile <- 0.01
+test <- TRUE
+while(test){
+quant <- quantile(LRT_dist,percentile)
+test <- Like_ratio[2,"Chisq"] < quant
+percentile <- percentile + 0.01
+}
+
+per_mod1 <- percentile - 0.01
+
+
+###### int Cont:RD1Kdiff
+
+Model_sim2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
+                     Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD50Kdiff +
+                     (1|SS),
+                   data = TPD_data)
+
+summary(Model_sim2)
+
+AIC(Model_sim2)
+
+
+Like_ratio <- anova(Model_1, Model_sim2)
+
+
+LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim2)
+
+percentile <- 0.01
+test <- TRUE
+while(test){
+  quant <- quantile(LRT_dist,percentile)
+  test <- Like_ratio[2,"Chisq"] < quant
+  percentile <- percentile + 0.01
+}
+
+per_mod2 <- percentile - 0.01
+
+###### int Cont:S2logHPD
+
+Model_sim3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
+                     Cont:sqrtS2RD1K + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                     (1|SS),
+                   data = TPD_data)
+
+summary(Model_sim3)
+
+AIC(Model_sim3)
+
+
+Like_ratio <- anova(Model_1, Model_sim3)
+
+
+LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim3)
+
+percentile <- 0.01
+test <- TRUE
+while(test){
+  quant <- quantile(LRT_dist,percentile)
+  test <- Like_ratio[2,"Chisq"] < quant
+  percentile <- percentile + 0.01
+}
+
+per_mod3 <- percentile - 0.01
+
+
+###### int Cont:sqrtS2RD1k
+
+Model_sim3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
+                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
+                     Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                     (1|SS),
+                   data = TPD_data)
+
+summary(Model_sim3)
+
+AIC(Model_sim3)
+
+
+Like_ratio <- anova(Model_1, Model_sim3)
+
+
+LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim3)
+
+percentile <- 0.01
+test <- TRUE
+while(test){
+  quant <- quantile(LRT_dist,percentile)
+  test <- Like_ratio[2,"Chisq"] < quant
+  percentile <- percentile + 0.01
+}
+
+per_mod3 <- percentile - 0.01
 
 ##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
 ##### interaction can be dropped from the model.
