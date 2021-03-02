@@ -310,8 +310,6 @@ hist(Overlap_data$TPD_Overlap)
 
 
 hyper_data <- readRDS("Outputs/Functional_Overlap_data.rds")
-Similarity_data <- readRDS("Outputs/similarity_data.rds")
-
 
 #### Join the overlap caluclated using trait probability density methods 
 

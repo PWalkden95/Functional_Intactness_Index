@@ -10,7 +10,6 @@ require(ggResidpanel)
 #### Load in Similarity data
 
 
-Similarity_data <- readRDS("Outputs/similarity_data.rds")
 TPD_data <- readRDS("Outputs/Trait_Prob_den.rds")
 
 
@@ -47,7 +46,8 @@ TPD_data <- TPD_data %>% dplyr::mutate(Cont = ifelse(grepl(Contrast, pattern = "
 
 
 levels(TPD_data$Cont) <- c("PriMin-PriMin","PriMin-SecMin", "PriMin-UrbMin","PriMin-Cropland", "PriMin-Primary","PriMin-SecLig")
-
+table(TPD_data$Cont)
+TPD_data <- TPD_data[-118,]
 
 TPD_data$rt3env <- scale(TPD_data$rt3env)
 TPD_data$s2logHPD <- scale(TPD_data$S2logHPD)
@@ -60,15 +60,10 @@ TPD_data$RD50Kdiff <- scale(TPD_data$RD50Kdiff)
 TPD_data$CNTRLlogHPD <- scale(TPD_data$CNTRLlogHPD)
 
 
-source("https://highstat.com/Books/Book2/HighstatLibV10.R")
+##### Because data is being compared multiple times - the same primary minimal site compared multiple times you are not able to assess
+#### colinearity the usual way using VIF or otherwise so backwards stepwise model selection is going to take a while
 
-corvif(TPD_data[,c("Cont", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
-
-### some colinearity problems lets drop sqrtS2RD50k
-
-corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2RD1K", "RD1Kdiff", "RD50Kdiff")])
-
-
+##BUT first lets assess the optimal random effect structure in the maximal model
 
 
 ################################
@@ -79,14 +74,11 @@ corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2
 
 Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS),
                 data = TPD_data)
 
-summary(Model_1)
-
-AIC(Model_1)
 
 #### random slopes
 
@@ -94,126 +86,66 @@ AIC(Model_1)
 
 Model_2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logdist|SS),
                 data = TPD_data )
 
-summary(Model_2)
-
-AIC(Model_2)
 
 ## rt3env
 
 Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + rt3env|SS),
                 data = TPD_data)
 
-summary(Model_3)
-
-AIC(Model_3)
 
 
 ## logHPDdiff
 
 Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logHPDdiff|SS),
                 data = TPD_data )
 
-summary(Model_4)
-
-AIC(Model_4)
-
-## sqrtS2RD1K
-
-Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + sqrtS2RD1K|SS),
-                data = TPD_data)
-
-summary(Model_5)
-
-AIC(Model_5)
-
-## S2logHPD
-
-Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + S2logHPD|SS),
-                data = TPD_data )
-
-summary(Model_6)
-
-AIC(Model_6)
 
 ## RoadDdiff1k
 
-Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD1Kdiff|SS),
                 data = TPD_data)
 
-summary(Model_7)
-
-AIC(Model_7)
 
 ## RoadDdiff50k
 
-Model_8 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD50Kdiff|SS),
                 data = TPD_data)
-
-summary(Model_8)
-
-AIC(Model_8)
 
 
 ## Cont 
 
-Model_9 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + Cont|SS),
                 data = TPD_data)
-
-summary(Model_9)
-
-AIC(Model_9)
-
-### sqrtS2RD50k
-
-Model_10 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + sqrtS2RD50K|SS),
-                data = TPD_data)
-
-summary(Model_10)
-
-AIC(Model_10)
 
 
 MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
                       Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
-                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8), Mod9 = AIC(Model_9),
-                      Mod10 = AIC(Model_10))
+                      Mod7 = AIC(Model_7))
 
 
 
@@ -244,7 +176,10 @@ for(i in 1:1000){
 
 ##### Liklihood ratio function
 
-Permuted_model_simplification <- function(data, model1, model2){
+Permuted_model_simplification <- function(data, model1, remove){
+  
+  formula <- as.formula(paste("~.-",remove,sep = ""))
+  model2 <- update(model1,formula)
   
   LRT_dist <- c()
   
@@ -260,336 +195,302 @@ Permuted_model_simplification <- function(data, model1, model2){
     
   }
   
-  return(LRT_dist)  
+  mod_LRT <- anova(model1, model2)
+  ChiSq <- mod_LRT[2,"Chisq"]
   
+  dist_quant <- quantile(LRT_dist, 0.95)
+  
+  DROP <- ChiSq < dist_quant
+  
+  percentile <- 0.01
+  test <- TRUE
+  while(test & percentile < 1.01){
+    dq <- quantile(LRT_dist, percentile)
+    test <- ChiSq > dq
+    percentile <- percentile + 0.01
+  }
+perecentile <- percentile - 0.01
+  
+res <- data.frame(DROP = DROP, Percentile = perecentile)
+rownames(res) <- paste(remove)
+
+return(res)
 }
-
-
-
 ### so lets look at our best maximal model
 
 Anova(Model_1, type = "II")
-
 ### Because there may be some colinearity issues in the explanatory variables it is not reliable to pick the term to remove in the simplification
 ### using the highest p-value, therefore I will have to try removing all possibilities and proceeding with the model that imroves the most
 
 ###### int Cont:RD50Kdiff
 
-Model_sim1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff +
-                  (1|SS),
-                data = TPD_data)
-
-summary(Model_sim1)
-
-AIC(Model_sim1)
-
-
-Like_ratio <- anova(Model_1, Model_sim1)
-
-
-LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim1)
-
-percentile <- 0.01
-test <- TRUE
-while(test){
-quant <- quantile(LRT_dist,percentile)
-test <- Like_ratio[2,"Chisq"] < quant
-percentile <- percentile + 0.01
-}
-
-per_mod1 <- percentile - 0.01
-
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:RD50Kdiff")
 
 ###### int Cont:RD1Kdiff
 
-Model_sim2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                     Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD50Kdiff +
-                     (1|SS),
-                   data = TPD_data)
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:RD1Kdiff")
 
-summary(Model_sim2)
+###### int Cont:logHPDdiff
 
-AIC(Model_sim2)
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logHPDdiff")
 
+###### int Cont:rt3env
 
-Like_ratio <- anova(Model_1, Model_sim2)
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:rt3env")
 
+###### int Cont:logdist
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logdist")
 
-LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim2)
 
-percentile <- 0.01
-test <- TRUE
-while(test){
-  quant <- quantile(LRT_dist,percentile)
-  test <- Like_ratio[2,"Chisq"] < quant
-  percentile <- percentile + 0.01
-}
+Model_simp <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                    mod_sim5)
 
-per_mod2 <- percentile - 0.01
 
-###### int Cont:S2logHPD
+### Could drop all but Cont:logdist and Cont:S2logHPD shows the lowest probability of significantly lowering the explanatory
+### power of the model
 
-Model_sim3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                     Cont:sqrtS2RD1K + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                     (1|SS),
-                   data = TPD_data)
+Model_8 <- update(Model_1, ~.-Cont:RD50Kdiff)
 
-summary(Model_sim3)
+Anova(Model_8, type = "II")
 
-AIC(Model_sim3)
+###### int Cont:RD50Kdiff
 
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "RD50Kdiff")
 
-Like_ratio <- anova(Model_1, Model_sim3)
+###### int Cont:RD1Kdiff
 
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:RD1Kdiff")
 
-LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim3)
+###### int Cont:logHPDdiff
 
-percentile <- 0.01
-test <- TRUE
-while(test){
-  quant <- quantile(LRT_dist,percentile)
-  test <- Like_ratio[2,"Chisq"] < quant
-  percentile <- percentile + 0.01
-}
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logHPDdiff")
 
-per_mod3 <- percentile - 0.01
+###### int Cont:rt3env
 
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:rt3env")
 
-###### int Cont:sqrtS2RD1k
+###### int Cont:logdist
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logdist")
 
-Model_sim3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                     sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                     Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + Cont:sqrtS2RD50K +
-                     Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                     (1|SS),
-                   data = TPD_data)
 
-summary(Model_sim3)
+Model_simp2 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                    mod_sim5)
 
-AIC(Model_sim3)
+### remove Cont:sqrtS2RD1k
 
+Model_9 <- update(Model_8, ~.-RD50Kdiff)
 
-Like_ratio <- anova(Model_1, Model_sim3)
 
+Anova(Model_9, type = "III")
 
-LRT_dist <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_sim3)
+###### int Cont:RD1Kdiff
 
-percentile <- 0.01
-test <- TRUE
-while(test){
-  quant <- quantile(LRT_dist,percentile)
-  test <- Like_ratio[2,"Chisq"] < quant
-  percentile <- percentile + 0.01
-}
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:RD1Kdiff")
 
-per_mod3 <- percentile - 0.01
+###### int Cont:logHPDdiff
 
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logHPDdiff")
 
-Anova(Model_10,type = "II")
+###### int Cont:rt3env
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove  sqrtS2RD1k
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:rt3env")
 
-Model_11 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                    S2logHPD + RD1Kdiff + RD50Kdiff + 
-                   Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                   (1|SS) ,
-                 data = TPD_data)
+###### int Cont:logdist
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logdist")
 
-summary(Model_11)
 
-AIC(Model_11)
+Model_simp3 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
+summary(Model_9)
 
+### remove interaction Cont:RD50Kdiff
 
-Like_ratio <- anova(Model_10, Model_11)
+Model_13 <- update(Model_12, ~.-Cont:RD50Kdiff)
 
 
-LRT_dist2 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, model2 = Model_11)
+Anova(Model_9, type = "III")
 
-ninety_five <- quantile(LRT_dist2,0.95)
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "RD50Kdiff")
 
-Like_ratio[2,"Chisq"] > ninety_five
+###### int Cont:RD1Kdiff
 
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:RD1Kdiff")
 
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
+###### S2logHPD
 
-Anova(Model_11,type = "II")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "S2logHPD")
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove Cont:logHPDdiff
+######  sqrtS2RD1k
 
-Model_12 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff + RD50Kdiff + 
-                   Cont:logdist + Cont:rt3env +
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                   (1|SS) ,
-                 data = TPD_data)
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "sqrtS2RD1K")
 
-summary(Model_12)
+###### int Cont:sqrtS2RD50k
 
-AIC(Model_12)
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:sqrtS2RD50K")
 
+###### int Cont:logHPDdiff
 
+mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:logHPDdiff")
 
-Like_ratio <- anova(Model_11, Model_12)
+###### int Cont:rt3env
 
+mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:rt3env")
 
-LRT_dist3 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, model2 = Model_12)
+###### int Cont:logdist
+mod_sim8 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:logdist")
 
-ninety_five <- quantile(LRT_dist3,0.95)
 
-Like_ratio[2,"Chisq"] > ninety_five
+Model_simp4 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                     mod_sim5,mod_sim6,mod_sim7,mod_sim8)
 
-########## LRT test comes back negative and therefore the reduced model is not significantly reduced 
 
-Anova(Model_12,type = "II")
+#### Can remove RD50Kdiff
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove interaction between contrast:rt3env
+Model_14 <- update(Model_13, ~.-RD50Kdiff)
 
-Model_13 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff + RD50Kdiff + 
-                   Cont:logdist + 
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                   (1|SS) ,
-                 data = TPD_data)
 
-summary(Model_13)
+Anova(Model_14, type = "III")
 
-AIC(Model_13)
+###### int Cont:RD1Kdiff
 
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:RD1Kdiff")
 
-Like_ratio <- anova(Model_12, Model_13)
+###### S2logHPD
 
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "S2logHPD")
 
-LRT_dist4 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, model2 = Model_13)
+######  sqrtS2RD1k
 
-ninety_five <- quantile(LRT_dist4,0.95)
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "sqrtS2RD1K")
 
-Like_ratio[2,"Chisq"] > ninety_five
+###### int Cont:sqrtS2RD50k
 
-########## LRT test comes back negative and therefore the reduced model is not significantly reduced 
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:sqrtS2RD50K")
 
-Anova(Model_13,type = "II")
+###### int Cont:logHPDdiff
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove interaction between contrast:RD50Kdiff
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:logHPDdiff")
 
-Model_14 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff + RD50Kdiff + 
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:logdist +
-                   (1|SS) ,
-                 data = TPD_data)
+###### int Cont:rt3env
 
-summary(Model_14)
+mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:rt3env")
 
-AIC(Model_14)
+###### int Cont:logdist
+mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:logdist")
 
 
-Like_ratio <- anova(Model_13, Model_14)
+Model_simp5 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                     mod_sim5,mod_sim6,mod_sim7)
 
 
-LRT_dist5 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, model2 = Model_14)
+## Can't remove either of the S2 effects while the diff variable is in the model therefore Cont:rt3env interaction is removed
 
-ninety_five <- quantile(LRT_dist5,0.95)
+Model_15 <- update(Model_14, ~.-Cont:rt3env)
 
-Like_ratio[2,"Chisq"] > ninety_five
+Anova(Model_15, type = "III")
 
-########## LRT test comes back negative and therefore the reduced model is not significantly reduced 
+###### int Cont:RD1Kdiff
 
-Anova(Model_14,type = "II")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:RD1Kdiff")
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove RD50Kdiff
+###### S2logHPD
 
-Model_15 <- lmer(logitOver ~ Cont  + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff +  logdist +
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff + Cont:logdist +
-                   (1|SS) ,
-                 data = TPD_data)
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "S2logHPD")
 
-summary(Model_15)
+######  sqrtS2RD1k
 
-AIC(Model_15)
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "sqrtS2RD1K")
 
+###### int Cont:sqrtS2RD50k
 
-Like_ratio <- anova(Model_14, Model_15)
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:sqrtS2RD50K")
 
+###### int Cont:logHPDdiff
 
-LRT_dist6 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, model2 = Model_15)
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:logHPDdiff")
 
-ninety_five <- quantile(LRT_dist6,0.95)
+###### rt3env
 
-Like_ratio[2,"Chisq"] > ninety_five
+mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "rt3env")
 
-########## LRT test comes back negative and therefore the reduced model is not significantly reduced 
+###### int Cont:logdist
+mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:logdist")
 
-Anova(Model_15,type = "II")
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove rt3env
+Model_simp6 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                     mod_sim5,mod_sim6,mod_sim7)
 
-Model_16 <- lmer(logitOver ~ Cont  + logHPDdiff + 
-                   S2logHPD + RD1Kdiff + logdist + 
-                    Cont:S2logHPD + Cont:logdist + Cont:RD1Kdiff +
-                   (1|SS) ,
-                 data = TPD_data)
 
-summary(Model_16)
+### Remove Cont:logHPDdiff
 
-AIC(Model_16)
+Model_16 <- update(Model_15, ~.-Cont:logHPDdiff)
 
 
-Like_ratio <- anova(Model_15, Model_16)
 
+Anova(Model_16, type = "III")
 
-LRT_dist7 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, model2 = Model_16)
+###### int Cont:RD1Kdiff
 
-ninety_five <- quantile(LRT_dist7,0.95)
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:RD1Kdiff")
 
-Like_ratio[2,"Chisq"] > ninety_five
+###### S2logHPD
 
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "S2logHPD")
 
-########## LRT test comes back positive therefore the model loses a significant amount of explanatiry power and shuold not continue 
+######  sqrtS2RD1k
 
-Anova(Model_15,type = "II")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "sqrtS2RD1K")
 
-## Most are significant and fixed effects that aren't their interactions are therefore I will try to remove interaction between Cont:RD50kdiff
+###### int Cont:sqrtS2RD50k
 
-Model_17 <- lmer(logitOver ~ Cont  + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff +  logdist +
-                   Cont: Cont:S2logHPD + Cont:RD1Kdiff +
-                   (1|SS) ,
-                 data = TPD_data)
-summary(Model_17)
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:sqrtS2RD50K")
 
-AIC(Model_17)
+###### logHPDdiff
 
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "logHPDdiff")
 
-Like_ratio <- anova(Model_15, Model_17)
+###### rt3env
 
+mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "rt3env")
 
-LRT_dist8 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, model2 = Model_17)
+###### int Cont:logdist
+mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:logdist")
 
-ninety_five <- quantile(LRT_dist8,0.95)
 
-Like_ratio[2,"Chisq"] > ninety_five
+Model_simp7 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                     mod_sim5,mod_sim6,mod_sim7)
 
-########## LRT test comes back negative and therefore the reduced model is not significantly reduced 
+##### Can remove the rt3env fixed effect
 
-Anova(Model_15,type = "II")
+Model_17 <- update(Model_16, ~.-rt3env)
+Model_17@call
 
-summary(Model_15)
 
-test <- lmer(logitOver ~ Cont  + rt3env + logHPDdiff + 
-                   S2logHPD + RD1Kdiff +  logdist +
-                   (1|SS) ,
-                 data = TPD_data)
-summary(test)
+Anova(Model_17, type = "III")
 
+###### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:RD1Kdiff")
+
+###### S2logHPD
+
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "S2logHPD")
+
+######  sqrtS2RD1k
+
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "sqrtS2RD1K")
+
+###### int Cont:sqrtS2RD50k
+
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:sqrtS2RD50K")
+
+###### logHPDdiff
+
+mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "logHPDdiff")
+
+###### int Cont:logdist
+mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:logdist")
+
+
+Model_simp8 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
+                     mod_sim5,mod_sim6)
