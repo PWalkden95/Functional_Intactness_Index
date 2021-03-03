@@ -74,7 +74,7 @@ TPD_data$CNTRLlogHPD <- scale(TPD_data$CNTRLlogHPD)
 
 Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
+                  Cont:logdist +  Cont:logHPDdiff +
                   + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS),
                 data = TPD_data)
@@ -86,28 +86,18 @@ Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff +
 
 Model_2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:logdist +  Cont:logHPDdiff + 
                     Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logdist|SS),
                 data = TPD_data )
 
 
-## rt3env
-
-Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
-                    Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + rt3env|SS),
-                data = TPD_data)
-
-
 
 ## logHPDdiff
 
-Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:logdist +  Cont:logHPDdiff + 
                     Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logHPDdiff|SS),
                 data = TPD_data )
@@ -115,9 +105,9 @@ Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff +
 
 ## RoadDdiff1k
 
-Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:logdist +  Cont:logHPDdiff + 
                     Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD1Kdiff|SS),
                 data = TPD_data)
@@ -125,9 +115,9 @@ Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff +
 
 ## RoadDdiff50k
 
-Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:logdist +  Cont:logHPDdiff + 
                   Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD50Kdiff|SS),
                 data = TPD_data)
@@ -135,17 +125,16 @@ Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff +
 
 ## Cont 
 
-Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
                   sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff + 
+                  Cont:logdist +  Cont:logHPDdiff + 
                     Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + Cont|SS),
                 data = TPD_data)
 
 
 MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
-                      Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
-                      Mod7 = AIC(Model_7))
+                      Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6))
 
 
 
@@ -234,51 +223,70 @@ mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove
 
 mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logHPDdiff")
 
-###### int Cont:rt3env
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:rt3env")
 
 ###### int Cont:logdist
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logdist")
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logdist")
 
 
-Model_simp <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                    mod_sim5)
+Model_simp <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
 
 ### Could drop all but Cont:logdist and Cont:S2logHPD shows the lowest probability of significantly lowering the explanatory
 ### power of the model
 
-Model_8 <- update(Model_1, ~.-Cont:RD50Kdiff)
+Model_7 <- update(Model_1, ~.-Cont:RD50Kdiff)
 
-Anova(Model_8, type = "II")
+Anova(Model_7, type = "II")
 
-###### int Cont:RD50Kdiff
+###### RD50Kdiff
 
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "RD50Kdiff")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "RD50Kdiff")
 
 ###### int Cont:RD1Kdiff
 
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:RD1Kdiff")
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:RD1Kdiff")
 
 ###### int Cont:logHPDdiff
 
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logHPDdiff")
-
-###### int Cont:rt3env
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:rt3env")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:logHPDdiff")
 
 ###### int Cont:logdist
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logdist")
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:logdist")
 
 
-Model_simp2 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                    mod_sim5)
+Model_simp2 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
 ### remove Cont:sqrtS2RD1k
 
-Model_9 <- update(Model_8, ~.-RD50Kdiff)
+Model_8 <- update(Model_7, ~.-RD50Kdiff)
+
+
+Anova(Model_8, type = "III")
+
+
+###### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:RD1Kdiff")
+
+###### int Cont:logHPDdiff
+
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logHPDdiff")
+
+###### int Cont:logdist
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logdist")
+
+##### S2 RD50k
+
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "sqrtS2RD50K")
+
+
+Model_simp3 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
+
+
+
+### remove interaction Cont:RD50Kdiff
+
+Model_9 <- update(Model_8, ~.-sqrtS2RD50K)
 
 
 Anova(Model_9, type = "III")
@@ -291,206 +299,75 @@ mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove
 
 mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logHPDdiff")
 
-###### int Cont:rt3env
-
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:rt3env")
-
 ###### int Cont:logdist
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logdist")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logdist")
 
-
-Model_simp3 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
-
-summary(Model_9)
-
-### remove interaction Cont:RD50Kdiff
-
-Model_13 <- update(Model_12, ~.-Cont:RD50Kdiff)
-
-
-Anova(Model_9, type = "III")
-
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "RD50Kdiff")
-
-###### int Cont:RD1Kdiff
-
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:RD1Kdiff")
-
-###### S2logHPD
-
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "S2logHPD")
-
-######  sqrtS2RD1k
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "sqrtS2RD1K")
-
-###### int Cont:sqrtS2RD50k
-
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:sqrtS2RD50K")
-
-###### int Cont:logHPDdiff
-
-mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:logHPDdiff")
-
-###### int Cont:rt3env
-
-mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:rt3env")
-
-###### int Cont:logdist
-mod_sim8 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, remove = "Cont:logdist")
-
-
-Model_simp4 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                     mod_sim5,mod_sim6,mod_sim7,mod_sim8)
+##### S2 RD50k
+Model_simp4 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
 
 #### Can remove RD50Kdiff
 
-Model_14 <- update(Model_13, ~.-RD50Kdiff)
+Model_10 <- update(Model_9, ~.-Cont:logHPDdiff)
 
 
-Anova(Model_14, type = "III")
+Anova(Model_10, type = "III")
 
-###### int Cont:RD1Kdiff
+####### int Cont:RD1Kdiff
 
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:RD1Kdiff")
-
-###### S2logHPD
-
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "S2logHPD")
-
-######  sqrtS2RD1k
-
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "sqrtS2RD1K")
-
-###### int Cont:sqrtS2RD50k
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:sqrtS2RD50K")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "Cont:RD1Kdiff")
 
 ###### int Cont:logHPDdiff
 
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:logHPDdiff")
-
-###### int Cont:rt3env
-
-mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:rt3env")
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "logHPDdiff")
 
 ###### int Cont:logdist
-mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, remove = "Cont:logdist")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "Cont:logdist")
 
-
-Model_simp5 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                     mod_sim5,mod_sim6,mod_sim7)
-
+##### S2 RD50k
+Model_simp5 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
 ## Can't remove either of the S2 effects while the diff variable is in the model therefore Cont:rt3env interaction is removed
 
-Model_15 <- update(Model_14, ~.-Cont:rt3env)
+Model_11 <- update(Model_10, ~.-logHPDdiff)
 
-Anova(Model_15, type = "III")
+Anova(Model_11, type = "III")
 
-###### int Cont:RD1Kdiff
+####### int Cont:RD1Kdiff
 
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:RD1Kdiff")
-
-###### S2logHPD
-
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "S2logHPD")
-
-######  sqrtS2RD1k
-
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "sqrtS2RD1K")
-
-###### int Cont:sqrtS2RD50k
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:sqrtS2RD50K")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "Cont:RD1Kdiff")
 
 ###### int Cont:logHPDdiff
 
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:logHPDdiff")
-
-###### rt3env
-
-mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "rt3env")
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "S2logHPD")
 
 ###### int Cont:logdist
-mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, remove = "Cont:logdist")
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "Cont:logdist")
 
-
-Model_simp6 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                     mod_sim5,mod_sim6,mod_sim7)
-
-
-### Remove Cont:logHPDdiff
-
-Model_16 <- update(Model_15, ~.-Cont:logHPDdiff)
+##### S2 RD50k
+Model_simp6 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
 
 
-Anova(Model_16, type = "III")
 
-###### int Cont:RD1Kdiff
+Model_12 <- update(Model_11, ~.-S2logHPD)
 
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:RD1Kdiff")
 
-###### S2logHPD
 
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "S2logHPD")
+Anova(Model_12, type = "III")
 
-######  sqrtS2RD1k
+####### int Cont:RD1Kdiff
 
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "sqrtS2RD1K")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, remove = "Cont:RD1Kdiff")
 
-###### int Cont:sqrtS2RD50k
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:sqrtS2RD50K")
-
-###### logHPDdiff
-
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "logHPDdiff")
-
-###### rt3env
-
-mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "rt3env")
 
 ###### int Cont:logdist
-mod_sim7 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:logdist")
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, remove = "Cont:logdist")
 
 
-Model_simp7 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                     mod_sim5,mod_sim6,mod_sim7)
-
-##### Can remove the rt3env fixed effect
-
-Model_17 <- update(Model_16, ~.-rt3env)
-Model_17@call
+Model_simp7 <- rbind(mod_sim1,mod_sim2)
 
 
-Anova(Model_17, type = "III")
-
-###### int Cont:RD1Kdiff
-
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:RD1Kdiff")
-
-###### S2logHPD
-
-mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "S2logHPD")
-
-######  sqrtS2RD1k
-
-mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "sqrtS2RD1K")
-
-###### int Cont:sqrtS2RD50k
-
-mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:sqrtS2RD50K")
-
-###### logHPDdiff
-
-mod_sim5 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "logHPDdiff")
-
-###### int Cont:logdist
-mod_sim6 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, remove = "Cont:logdist")
+summary(Model_12)
 
 
-Model_simp8 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4,
-                     mod_sim5,mod_sim6)
