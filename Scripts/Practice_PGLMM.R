@@ -23,7 +23,7 @@ PREDICTS_abundance <- readRDS("Outputs/abundance_data.rds")
 hist(PREDICTS_site$Bias_Rao, breaks = 20)
 hist(PREDICTS_site$Unbias_Rao, breaks = 20)
 
-plot(PREDICTS_site$Bias_Rao ~ PREDICTS_site$Unbias_Rao)
+plot(PREDICTS_site$Unbias_Rao ~ PREDICTS_site$Bias_Rao)
 
 
 ###### First we will want outliers 
@@ -165,7 +165,7 @@ among_site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
   
 PREDICTS_site <- PREDICTS_site %>% droplevels()
   
-among_site_vcv <- readRDS("Functional_Intactness_Index/Outputs/Site_Among_Study_Vcv.rds")
+among_site_vcv <- readRDS("Outputs/site_cv.rds")
 
 studies <- as.character(unique(PREDICTS_site$SS))
 
@@ -406,21 +406,21 @@ Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
                                 RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
                                 logHPD = Rao_Model_8b$DIC - Rao_Model_1b$DIC)   
 
-
-### Model improves the most when I removed the interaction between LUI:RD1k
+Model_differences
+### Model improves the most when I removed the interaction between LUI:RD50k
 
 ### Next round of removals -- 
 
-## fixed effect RD1k
+## fixed effect RD50k
 
-Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
-                                       LUI:logHPD + LUI:RD50k +
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD1k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD1k +
                                        (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 
 
-# LUI:RD50k
+# LUI:RD1k
 
 Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
                                         LUI:logHPD +
@@ -431,20 +431,20 @@ Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k 
 # LUI:logHPD
 
 Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
-                                        LUI:RD50k +
+                                        LUI:RD1k +
                                         (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
 
 
 
 
 
-Model_differences <- data.frame(RD1k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
-                                RD50k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
+Model_differences <- data.frame(RD50k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
+                                RD1k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
                                 logHPD = Rao_Model_11b$DIC - Rao_Model_7b$DIC)   
 
 Model_differences
 
-#### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 10b is best 
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD1k so model 10b is best 
 
 ## RD50k fixed
 
@@ -568,6 +568,8 @@ summary(Rao_Model_14b)
 
 plot(Robust_mod)
 
+
+Robust_mod
 ###### so lets have a look at whats going on.
 
 utils::sessionInfo()

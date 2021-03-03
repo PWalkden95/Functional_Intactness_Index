@@ -253,6 +253,23 @@ for(col in colnames(trait_data[,-1])){
 
 ### RAO's Qaudratic Entropy an abundance-weighted measure of diversity - in our case functional diversity 
 
+## first need to combine a couple of studies 
+
+combine_stud <- PREDICTS_Aves_Am %>% filter(grepl(SS, pattern = "Lasky")) %>% group_by(Site_name, Jetz_Name) %>%
+  dplyr::mutate(Effort_Corrected_Measurement = sum(Effort_Corrected_Measurement)) %>% ungroup() %>%
+  dplyr::distinct(Site_name, Jetz_Name, .keep_all = TRUE) %>% dplyr::mutate(SSBS = ifelse(SSBS == "HP1_2010__Lasky 2  1", "HP1_2010__Lasky 1  1", paste(SSBS)),
+                                                                            SSBS = ifelse(SSBS == "HP1_2010__Lasky 2  2", "HP1_2010__Lasky 1  2", paste(SSBS)),
+                                                                            SSBS = ifelse(SSBS == "HP1_2010__Lasky 2  3", "HP1_2010__Lasky 1  3", paste(SSBS)),
+                                                                            SSBS = ifelse(SSBS == "HP1_2010__Lasky 2  4", "HP1_2010__Lasky 1  4", paste(SSBS)),
+                                                                            SSBS = ifelse(SSBS == "HP1_2010__Lasky 2  5", "HP1_2010__Lasky 1  5", paste(SSBS)),
+                                                                            SSBS = factor(SSBS),
+                                                                            SS = ifelse(SS == "HP1_2010__Lasky 2", "HP1_2010__Lasky 1", paste(SS)),
+                                                                            SS = factor(SS),
+                                                                            SSB = ifelse(SSB == "HP1_2010__Lasky 2", "HP1_2010__Lasky 1", paste(SS)),
+                                                                            SSB = factor(SSB))
+
+PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>% filter(!(grepl(SS, pattern = "Lasky"))) %>% rbind(combine_stud)
+
 
 ## get abundance data for each species with each site  
   
@@ -278,9 +295,16 @@ abundance_data <- PREDICTS_Aves_Am %>% dplyr::filter(Diversity_metric == "abunda
   ### relative abundance of each species at each site SpeciesSitelevel abundance/TotalSite abundance
   dplyr::mutate(RelativeAbundance = SpeciesSiteAbundance/TotalSiteAbundance) %>%
   
+  dplyr::filter(SS != "GN1_2010__Hvenegaard 1") %>%
+  
   droplevels()
 
-write_rds(abundance_data, file = "Functional_Intactness_Index/Outputs/abundance_data.rds")
+#### neeed to merge a couple of studies that are replicates of the same sites, eithr in different seasns (wet and dry in Lasky) 
+### or point count has been conducted at different radii ( as in hevengaard)
+
+
+
+write_rds(abundance_data, file = "Outputs/abundance_data.rds")
 
 
 morpho_traits <- readRDS("Outputs/PC_Scores.rds")
@@ -435,6 +459,8 @@ Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% filter(Effort_Corrected_Meas
   
   droplevels() %>%
   
+  dplyr::filter(SS != "GN1_2010__Hvenegaard 1") %>%
+  
   data.frame()
 
 write_rds(Similarity_data, file = "Outputs/similarity_data.rds")
@@ -454,7 +480,6 @@ studies <- levels(Similarity_data$SS)
 
 #### empty data frame for results to go into 
 
-study <- studies[2]
 
 
 registerDoParallel(cores = 4)
