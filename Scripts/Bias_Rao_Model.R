@@ -146,3 +146,10 @@ Rao_Model_14b$DIC - Rao_Model_11b$DIC  ## nope modell 11b best again
 
 summary(Rao_Model_11b)
 
+
+
+
+Model_12 <- lmerTest::lmer(formula = logitOver ~ Cont + logdist + rt3env + sqrtS2RD1K + 
+                   RD1Kdiff + CNTRLlogHPD + (1 | SS) + Cont:logdist + Cont:RD1Kdiff, 
+                 data = TPD_data)
+summary(Model_12)

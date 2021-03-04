@@ -39,6 +39,9 @@ require(lme4)
 require(poolr)
 require(car)
 require(robustlmm)
+require(ggResidpanel)
+require(GGally)
+require(broom.helpers)
 ```
 
 
@@ -198,7 +201,8 @@ create_vcv <- function(data, level) {
   
   comm_data <- as.matrix(comm_data)
   
-
+  
+  suppressWarnings(memory.limit(120000))
   
   vcv <- 1 - as.matrix(unifrac(comm = comm_data, tree = overall_tree))
  
@@ -211,7 +215,7 @@ create_vcv <- function(data, level) {
 
 site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
   
-  #write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
+  write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
 ```
 
 ## Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
@@ -250,7 +254,7 @@ plot(site_dendro)
 
 ### Can actually see that there is not a large amount of heirarchial structure within the sites with only studies conducted simultaneously showing a greater amount of similarity compared with the rest of the studies 
 ```
-The two `Lasky` studies are related to each other because they are studies at the smae sites but between the wet and the dry season - should I then collapse them in on each other? The `Hvenegaard` studies are again at the same sites but conducted at a 50m radius and unlimited radius again should probably remove or collapse the studies into each other?
+The two `Lasky` studies are related to each other because they are studies at the smae sites but between the wet and the dry season - should I then collapse them in on each other? The `Hvenegaard` studies are again at the same sites but conducted at a 50m radius and unlimited radius again should probably remove or collapse the studies into each other? I have since done this my merging the two sites for `lasky` and then discarded the study that conducted their point count survey at 50m radius.
 
 ```{r}
 #### This initially does not suggest that there is a large amount of phylogenetic similarity between sites resulting in hierarcial and
@@ -409,7 +413,7 @@ Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 =
 Random_DIC
 ```
 
-The model with the lowest DIC is with no random slope therefore model 1 will be carried forward. 
+The model with the lowest DIC is with a random slope of RD50k with therefore model 5 will be carried forward. 
 
 Next to identify the optimal fixed effect structure I removed both interactions in turn to see whether that reduced the DIC of the model. Typically a reduction >2 will provide support for the simplified model. 
 
@@ -421,7 +425,7 @@ Next to identify the optimal fixed effect structure I removed both interactions 
 
 Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -429,14 +433,14 @@ Rao_Model_6b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + 
 
 Rao_Model_7b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD50k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 # LUI:logHPD
 
 Rao_Model_8b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:RD50k + LUI:RD1k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -445,47 +449,47 @@ Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
                                 RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
                                 logHPD = Rao_Model_8b$DIC - Rao_Model_1b$DIC)   
 
-#### Model DIC is reduced in all but most when removing the interaction between LUI:RD1k so model 7b is best 
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 6b is best 
 
-## RD1k fixed
+## RD50k fixed
 
-Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
-                                       LUI:logHPD + LUI:RD50k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
-
-
+Rao_Model_9b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD1k + CNTRLlogHPD +
+                                       LUI:logHPD + LUI:RD1k +
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
-# LUI:RD50k
 
-Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
+
+# LUI:RD1k
+
+Rao_Model_10b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
 # LUI:logHPD
 
 Rao_Model_11b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
-                                        LUI:RD50k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                        LUI:RD1k +
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
 
 
-Model_differences <- data.frame(RD1k = Rao_Model_9b$DIC - Rao_Model_7b$DIC,
-                                RD50k = Rao_Model_10b$DIC - Rao_Model_7b$DIC,
-                                logHPD = Rao_Model_11b$DIC - Rao_Model_7b$DIC)   
+Model_differences <- data.frame(RD50k = Rao_Model_9b$DIC - Rao_Model_6b$DIC,
+                                RD1k = Rao_Model_10b$DIC - Rao_Model_6b$DIC,
+                                logHPD = Rao_Model_11b$DIC - Rao_Model_6b$DIC)   
 
-Model_differences
-#### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 10b is best 
+
+#### Model DIC is reduced in all but most when removing the interaction between LUI:RD1k so model 10b is best 
 
 ## RD50k fixed
 
 Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
                                        LUI:logHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -493,7 +497,7 @@ Rao_Model_12b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlo
 
 Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRLlogHPD +
                                        LUI:logHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -501,7 +505,7 @@ Rao_Model_13b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + CNTRL
 
 
 Rao_Model_14b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD + 
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -516,14 +520,14 @@ Model_differences
 
 
 Rao_Model_15b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
 #### RD1k
 
 Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k + CNTRLlogHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -531,7 +535,7 @@ Rao_Model_16b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + logHPD + RD50k + CNTRLl
 
 
 Rao_Model_17b <- phyr::communityPGLMM(Unbias_Rao ~ LUI + RD1k + RD50k + CNTRLlogHPD +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
 
 
 
@@ -605,6 +609,7 @@ looking at the residuals it seems that there are some influential points that ar
 ```{r}
 Robust_mod <- rlmer(Unbias_Rao ~ LUI + logHPD  + RD50k + RD1k + CNTRLlogHPD +
                       (1|SS) + (1|SSB), data = PREDICTS_site)
+summary(Robust_mod)
 ```
 
 ### Rao_Model_14b
@@ -621,12 +626,17 @@ Running the model selection framework with the "biased" Rao yielded similar resu
 
 To assess the impact of landuse change and other pressures on functional similarity, calculated as the overlap between trait probability density hypervolumes in trait space I used GLMMS. The other pressures include human population density, density of roads @ 1 and 50km radii, and geographic and environmental distances. Additionally, since the functional similarity of sites may be influenced by the absolute level of pressure experienced at that site but also the difference in pressure experience between the sites, I included the pressure at site 2 (the site being compared to Primary minimal land use) and the difference in pressures between site 1 and 2. 
 
-To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. To determine the best fixed effect structure is more difficult however, as the comparisons are not-independent of each other as a single primary minimal site will being compared to multiple of other sites, therefore traditional likelihood ratio tests will not be suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model. 
+Because we are interested more in the differences between sites as predictors for functional similarity I considered the absolute value at the second site as an control variable and the differences and their interactions as possible explanatory variables. In model selection if the difference in pressure between the sites drops out of the model the control variable is also removed.  
+
+To determine the optimal random effect structure I used the aforementioned selection process picking the structure with the lowest AIC. 
+
+Determining the best fixed effect structure however, is a bit more difficult, as the comparisons are not-independent of each other as a single primary minimal site being compared multiple times, therefore traditional likelihood ratio tests will not be suitable. Again following [De Palma et al. In review](https://www.biorxiv.org/content/10.1101/311688v3.full#ref-48), I permuted the data 1000 times by randomly shuffling the functional similarity scores within studies and refitted the full and simplified model to each permuted dataset to generate a distribution of Likelihood ratio scores. Comparing the likelihood ratio score between models using the observed data to this distribution, a simplified model would be supported if the score is lower than the 95th percentile of the distribution as it has not significantly reduced the explanatory power of the model. 
 
 As the overlap score will be bound between 0 and 1 as it is the proportion of overlap between two communities I logit transformed the values to extend the tails of the distribution. 
 
 
 ```{r load in data, eval=FALSE, echo=FALSE}
+rm(list = ls())
 TPD_data <- readRDS("Outputs/Trait_Prob_den.rds")
 Similarity_data <- readRDS("Outputs/similarity_data.rds")
 
@@ -677,6 +687,11 @@ TPD_data <- TPD_data %>% dplyr::mutate(Cont = ifelse(grepl(Contrast, pattern = "
 
 levels(TPD_data$Cont) <- c("PriMin-PriMin","PriMin-SecMin", "PriMin-UrbMin","PriMin-Cropland", "PriMin-Primary","PriMin-SecLig")
 
+### there is only a single Urban minimal site left and is therefore dropped 
+
+TPD_data <- TPD_data[-which(TPD_data$Cont == "PriMin-UrbMin"),] %>% droplevels()
+
+
 table(TPD_data$Cont)
 
 TPD_data$rt3env <- scale(TPD_data$rt3env)
@@ -710,9 +725,9 @@ corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2
 
 
 Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff +
+                  + Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS),
                 data = TPD_data)
 
@@ -722,95 +737,66 @@ Model_1 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff +
 ## logdist
 
 Model_2 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logdist|SS),
                 data = TPD_data )
 
-## rt3env
-
-Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + rt3env|SS),
-                data = TPD_data)
 
 
 ## logHPDdiff
 
-Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+Model_3 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + logHPDdiff|SS),
-                data = TPD_data )
-
-## sqrtS2RD1K
-
-Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + sqrtS2RD1K|SS),
-                data = TPD_data)
-
-
-## S2logHPD
-
-Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
-                  (1|SS) + (1 + S2logHPD|SS),
                 data = TPD_data )
 
 
 ## RoadDdiff1k
 
-Model_7 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env + Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+Model_4 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD1Kdiff|SS),
                 data = TPD_data)
 
 
 ## RoadDdiff50k
 
-Model_8 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+Model_5 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff + 
+                  Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + RD50Kdiff|SS),
                 data = TPD_data)
 
 
-
 ## Cont 
 
-Model_9 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
-                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + 
-                  Cont:logdist + Cont:rt3env +  Cont:logHPDdiff +
-                  Cont:sqrtS2RD1K + Cont:S2logHPD + Cont:RD1Kdiff + Cont:RD50Kdiff +
+Model_6 <- lmer(logitOver ~ Cont + logdist + rt3env  + logHPDdiff + 
+                  sqrtS2RD1K + S2logHPD + RD1Kdiff + RD50Kdiff + sqrtS2RD50K + CNTRLlogHPD +
+                  Cont:logdist +  Cont:logHPDdiff + 
+                    Cont:RD1Kdiff + Cont:RD50Kdiff +
                   (1|SS) + (1 + Cont|SS),
                 data = TPD_data)
 
 
-
 MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3),
-                      Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6),
-                      Mod7 = AIC(Model_7),Mod8 = AIC(Model_8), Mod9 = AIC(Model_9))
+                      Mod4 = AIC(Model_4),Mod5 = AIC(Model_5),Mod6 = AIC(Model_6))
 
 
 
 ```
 
-Model 2 and 3 have the lowest AIC scores, however they both failed to converge therefore, I will proceed with Model 1 which is the next model with the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
+Model 2 and 6 have the lowest AIC scores, however both they have singular fits therefore, I will proceed with Model 1 which is the next model with the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
 
 
 ```{r permuted data, eval = FALSE , echo=FALSE}
+
 
 Permuted_data <- rep(list(NA),1000)
 
@@ -818,380 +804,230 @@ for(i in 1:1000){
   
   sample_data <-c()
   
-  for(study in unique(Overlap_data$SS)){
-    data <- Overlap_data %>% filter(SS == study)
+  for(study in unique(TPD_data$SS)){
+    data <- TPD_data %>% filter(SS == study)
     
     data$logitOver <- data[sample(NROW(data)),"logitOver"]
     
     sample_data <- rbind(sample_data,data)
-     
+    
   }
   
   Permuted_data[[i]] <- sample_data
   
 }
 
-#### function to generate the LR distribution across the 100 datasets
+#### function to generate the LR distribution across the 1000 datasets
 
 ##### Liklihood ratio function
 
-Permuted_model_simplification <- function(data, model1, model2){
-
+Permuted_model_simplification <- function(data, model1, remove){
+  
+  formula <- as.formula(paste("~.-",remove,sep = ""))
+  model2 <- update(model1,formula)
+  
   LRT_dist <- c()
   
   for(i in 1:length(data)){
-  
-  mod1 <- lmer(model1@call, data = data[[i]], REML = FALSE)
-  mod2 <- lmer(model2@call, data = data[[i]], REML = FALSE)
-  
-  LRT <- anova(mod1,mod2)
-  LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]
-  
-  LRT_dist <- rbind(LRT_dist,LRT)
-  
+    
+    mod1 <- lmer(model1@call, data = data[[i]], REML = FALSE)
+    mod2 <- lmer(model2@call, data = data[[i]], REML = FALSE)
+    
+    LRT <- anova(mod1,mod2)
+    LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]
+    
+    LRT_dist <- rbind(LRT_dist,LRT)
+    
   }
-
-  return(LRT_dist)  
   
+  mod_LRT <- anova(model1, model2)
+  ChiSq <- mod_LRT[2,"Chisq"]
+  
+  dist_quant <- quantile(LRT_dist, 0.95)
+  
+  DROP <- ChiSq < dist_quant
+  
+  percentile <- 0.01
+  test <- TRUE
+  while(test & percentile < 1.01){
+    dq <- quantile(LRT_dist, percentile)
+    test <- ChiSq > dq
+    percentile <- percentile + 0.01
+  }
+perecentile <- percentile - 0.01
+  
+res <- data.frame(DROP = DROP, Percentile = perecentile)
+rownames(res) <- paste(remove)
+
+return(res)
 }
-
-
 ### so lets look at our best maximal model
 
 Anova(Model_1, type = "II")
+### Because there may be some colinearity issues in the explanatory variables it is not reliable to pick the term to remove in the simplification
+### using the highest p-value, therefore I will have to try removing all possibilities and proceeding with the model that imroves the most
 
-### with the lowest p-value we should remove the interaction between Contrast and RD50Kdiff
+###### int Cont:RD50Kdiff
 
-Model_9 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + RD50Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:RD50Kdiff")
 
-summary(Model_9)
+###### int Cont:RD1Kdiff
 
-AIC(Model_9)
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:RD1Kdiff")
 
+###### int Cont:logHPDdiff
 
-Like_ratio <- anova(Model_1, Model_9)
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logHPDdiff")
 
 
-LRT_dist1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, model2 = Model_9)
-
- ninety_five <- quantile(LRT_dist1,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_9,type = "II")
-
-### lets remove RD50Kdiff fixed effect
-
-Model_10 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD1K + Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_10)
-
-AIC(Model_10)
+###### int Cont:logdist
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:logdist")
 
 
-Like_ratio <- anova(Model_9, Model_10)
+Model_simp <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
 
-LRT_dist2 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, model2 = Model_10)
+### Could drop all but Cont:logdist and Cont:S2logHPD shows the lowest probability of significantly lowering the explanatory
+### power of the model 
 
- ninety_five <- quantile(LRT_dist2,0.95)
+Model_7 <- update(Model_1, ~.-Cont:RD50Kdiff)
 
-Like_ratio[2,"Chisq"] > ninety_five
+Anova(Model_7, type = "II")
 
+###### RD50Kdiff
 
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "RD50Kdiff")
 
-Anova(Model_10,type = "II")
+###### int Cont:RD1Kdiff
 
-### next if we will remove sqrtS2RD1k interaction
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:RD1Kdiff")
 
-Model_11 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + sqrtS2RD50K + RD1Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
+###### int Cont:logHPDdiff
 
-summary(Model_11)
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:logHPDdiff")
 
-AIC(Model_11)
+###### int Cont:logdist
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove = "Cont:logdist")
 
 
-Like_ratio <- anova(Model_10, Model_11)
+Model_simp2 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
+
+### remove Cont:sqrtS2RD1k
+
+Model_8 <- update(Model_7, ~.-RD50Kdiff)
 
 
-LRT_dist3 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, model2 = Model_11)
+Anova(Model_8, type = "III")
 
- ninety_five <- quantile(LRT_dist3,0.95)
 
-Like_ratio[2,"Chisq"] > ninety_five
+###### int Cont:RD1Kdiff
 
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:RD1Kdiff")
 
-Anova(Model_11,type = "II")
+###### int Cont:logHPDdiff
 
-### next we will remove sqrtS2RD1k fixed effect
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logHPDdiff")
 
-Model_12 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logdist + Contrast:rt3env +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
+###### int Cont:logdist
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "Cont:logdist")
+
+##### S2 RD50k
+
+mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove = "sqrtS2RD50K")
+
+
+Model_simp3 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
+
+
+
+### remove interaction Cont:RD50Kdiff
+
+Model_9 <- update(Model_8, ~.-sqrtS2RD50K)
+
+
+Anova(Model_9, type = "III")
+
+###### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:RD1Kdiff")
+
+###### int Cont:logHPDdiff
+
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logHPDdiff")
+
+###### int Cont:logdist
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove = "Cont:logdist")
+
+##### S2 RD50k
+Model_simp4 <- rbind(mod_sim1,mod_sim2,mod_sim3)
+
+
+#### Can remove RD50Kdiff
+
+Model_10 <- update(Model_9, ~.-Cont:logHPDdiff)
+
+
+Anova(Model_10, type = "III")
+
+####### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "Cont:RD1Kdiff")
+
+###### int Cont:logHPDdiff
+
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "logHPDdiff")
+
+###### int Cont:logdist
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remove = "Cont:logdist")
+
+##### S2 RD50k
+Model_simp5 <- rbind(mod_sim1,mod_sim2,mod_sim3)
+
+## Can't remove either of the S2 effects while the diff variable is in the model therefore Cont:rt3env interaction is removed
+
+Model_11 <- update(Model_10, ~.-logHPDdiff)
+
+Anova(Model_11, type = "III")
+
+####### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "Cont:RD1Kdiff")
+
+###### int Cont:logHPDdiff
+
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "S2logHPD")
+
+###### int Cont:logdist
+mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remove = "Cont:logdist")
+
+##### S2 RD50k
+Model_simp6 <- rbind(mod_sim1,mod_sim2,mod_sim3)
+
+
+
+
+Model_12 <- update(Model_11, ~.-S2logHPD)
+
+
+
+Anova(Model_12, type = "III")
+
+####### int Cont:RD1Kdiff
+
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, remove = "Cont:RD1Kdiff")
+
+
+###### int Cont:logdist
+mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, remove = "Cont:logdist")
+
+
+Model_simp7 <- rbind(mod_sim1,mod_sim2)
+
 
 summary(Model_12)
-
-AIC(Model_12)
-
-
-Like_ratio <- anova(Model_11, Model_12)
-
-
-LRT_dist4 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, model2 = Model_12)
-
- ninety_five <- quantile(LRT_dist4,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_12,type = "II")
-
-### next we will remove the interaction between rt3env and Contrast
-
-Model_13 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logdist +  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_13)
-
-AIC(Model_13)
-
-
-Like_ratio <- anova(Model_12, Model_13)
-
-
-LRT_dist5 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, model2 = Model_13)
-
- ninety_five <- quantile(LRT_dist5,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_13,type = "II")
-
-### next we will remove the interaction between logdist and Contrast
-
-Model_14 <- lmer(logitOver ~ Contrast + logdist + rt3env + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_14)
-
-AIC(Model_14)
-
-
-Like_ratio <- anova(Model_13, Model_14)
-
-
-LRT_dist6 <- Permuted_model_simplification(Permuted_data,model1 = Model_13, model2 = Model_14)
-
- ninety_five <- quantile(LRT_dist6,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_14,type = "II")
-
-### next we will remove the rt3env fixed effect
-
-Model_15 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logHPDdiff +
-                  Contrast:sqrtS2RD50K + Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_15)
-
-AIC(Model_15)
-
-
-Like_ratio <- anova(Model_14, Model_15)
-
-
-LRT_dist7 <- Permuted_model_simplification(Permuted_data,model1 = Model_14, model2 = Model_15)
-
- ninety_five <- quantile(LRT_dist7,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_15,type = "II")
-
-### next we will remove the interaction between the interaction between sqrts2RD50k
-
-Model_16 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logHPDdiff +
-                  Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_16)
-
-AIC(Model_16)
-
-
-Like_ratio <- anova(Model_15, Model_16)
-
-
-LRT_dist8 <- Permuted_model_simplification(Permuted_data,model1 = Model_15, model2 = Model_16)
-
- ninety_five <- quantile(LRT_dist8,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is not significantly different from the distribution of LRT using the permuted data therefore the
-##### interaction can be dropped from the model.
-
-Anova(Model_16,type = "II")
-
-### next we will remove the interaction between the interaction between RD1Kdiff
-
-Model_17 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logHPDdiff +
-                                   (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_17)
-
-AIC(Model_17)
-
-
-Like_ratio <- anova(Model_16, Model_17)
-
-
-LRT_dist9 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_17)
-
- ninety_five <- quantile(LRT_dist9,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-
-##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
-
-Anova(Model_16,type = "II")
-
-### next we will remove the interaction between the interaction between Contrast and logHPDdiff
-
-Model_18 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                   Contrast:RD1Kdiff +
-                                   (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_18)
-
-AIC(Model_18)
-
-
-Like_ratio <- anova(Model_16, Model_18)
-
-
-LRT_dist10 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_18)
-
- ninety_five <- quantile(LRT_dist10,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
-
-Anova(Model_16,type = "II")
-
-### next we will remove the sqrtS2RD1K fixed effect
-
-Model_19 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  RD1Kdiff + 
-                   Contrast:RD1Kdiff +
-                   Contrast:logHPDdiff +
-                                   (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_19)
-
-AIC(Model_19)
-
-
-Like_ratio <- anova(Model_16, Model_19)
-
-
-LRT_dist11 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_19)
-
- ninety_five <- quantile(LRT_dist11,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
-
-
-##### LRT of models using the observed data is significantly different from the distribution of LRT using the permuted data therefore indicating that the reduced model has lost a significant amount of explanatory power and therefore the previous model is retained.
-
-Anova(Model_16,type = "II")
-
-### next we will remove the logdist fixed effect
-
-Model_20 <- lmer(logitOver ~ Contrast + logHPDdiff + 
-                  RD1Kdiff + sqrtS2RD1K +
-                   Contrast:RD1Kdiff +
-                   Contrast:logHPDdiff +
-                                   (1|SS),
-              data = Overlap_data, weights = min_site_spp )
-
-summary(Model_20)
-
-AIC(Model_20)
-
-
-Like_ratio <- anova(Model_16, Model_20)
-
-
-LRT_dist12 <- Permuted_model_simplification(Permuted_data,model1 = Model_16, model2 = Model_20)
-
- ninety_five <- quantile(LRT_dist12,0.95)
-
-Like_ratio[2,"Chisq"] > ninety_five
 ```
 
-Finally testing the removal of all other fixed effects and interactions in the model I have found that `Model_16` is the best model where these removals result in a model with significantly less explanatory power based on the permuted datasets.
+Finally testing the removal of all other fixed effects and interactions in the model I have found that `Model_12` is the best model where these removals result in a model with significantly less explanatory power based on the permuted datasets.
 
 Looking more closely at the model output we can see that the similarity of communities compared to that of primary minimally used sites 
 
@@ -1199,25 +1035,19 @@ Looking more closely at the model output we can see that the similarity of commu
 ``` {r final Overlap Model , echo=FALSE, eval = FALSE}
 Overlap_data <- readRDS("Functional_Intactness_Index/Overlap_modelling_data.rds")
 
-Model_16 <- lmer(logitOver ~ Contrast + logdist + logHPDdiff + 
-                  sqrtS2RD1K + RD1Kdiff + 
-                  Contrast:logHPDdiff +
-                  Contrast:RD1Kdiff +
-                 (1|SS),
-              data = Overlap_data, weights = min_site_spp )
 
 
 
-Anova(Model_16,type = "III")
+Anova(Model_12,type = "III")
 
-### next we will remove the interaction between the interaction between sqrts2RD50k
-summary(Model_16)
+ ### next we will remove the interaction between the interaction between sqrts2RD50k
+summary(Model_12)
 
-AIC(Model_16)
+AIC(Model_12)
 
-resid_panel(Model_16)
+resid_panel(Model_12)
 
 
 
-write_rds(file = "Functional_Intactness_Index/Overlap_GLMM.rds", Model_16)
+write_rds(file = "Outputs/TPD_Overlap_GLMM.rds", Model_12)
 ```
