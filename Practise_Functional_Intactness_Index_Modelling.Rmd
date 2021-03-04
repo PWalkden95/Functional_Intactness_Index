@@ -3,8 +3,8 @@ title: "Practise_FII_Modelling"
 author: "Patrick Alexander Walkden"
 date: "25/02/2021"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -35,7 +35,7 @@ require(tidyverse)
 require(raster)
 require(ggridges)
 require(motmot)
-require(lme4)
+require(lmerTest)
 require(poolr)
 require(car)
 require(robustlmm)
@@ -213,9 +213,9 @@ create_vcv <- function(data, level) {
 }
 
 
-site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
+#site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
   
-  write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
+ # write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
 ```
 
 ## Checking for phylogenetic signal in functional diversity and the responses of sites to land use change
@@ -449,6 +449,8 @@ Model_differences <- data.frame(RD50k = Rao_Model_6b$DIC - Rao_Model_1b$DIC,
                                 RD1k = Rao_Model_7b$DIC - Rao_Model_1b$DIC,
                                 logHPD = Rao_Model_8b$DIC - Rao_Model_1b$DIC)   
 
+Model_differences
+
 #### Model DIC is reduced in all but most when removing the interaction between LUI:RD50k so model 6b is best 
 
 ## RD50k fixed
@@ -482,7 +484,7 @@ Model_differences <- data.frame(RD50k = Rao_Model_9b$DIC - Rao_Model_6b$DIC,
                                 RD1k = Rao_Model_10b$DIC - Rao_Model_6b$DIC,
                                 logHPD = Rao_Model_11b$DIC - Rao_Model_6b$DIC)   
 
-
+Model_differences
 #### Model DIC is reduced in all but most when removing the interaction between LUI:RD1k so model 10b is best 
 
 ## RD50k fixed
@@ -635,7 +637,7 @@ Determining the best fixed effect structure however, is a bit more difficult, as
 As the overlap score will be bound between 0 and 1 as it is the proportion of overlap between two communities I logit transformed the values to extend the tails of the distribution. 
 
 
-```{r load in data, eval=FALSE, echo=FALSE}
+```{r load in data}
 rm(list = ls())
 TPD_data <- readRDS("Outputs/Trait_Prob_den.rds")
 Similarity_data <- readRDS("Outputs/similarity_data.rds")
@@ -704,18 +706,15 @@ TPD_data$RD1Kdiff <- scale(TPD_data$RD1Kdiff)
 TPD_data$RD50Kdiff <- scale(TPD_data$RD50Kdiff)
 
 
-source("https://highstat.com/Books/Book2/HighstatLibV10.R")
+#source("https://highstat.com/Books/Book2/HighstatLibV10.R")
 
-corvif(TPD_data[,c("Cont", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
+#corvif(TPD_data[,c("Cont", "logdist", "rt3env","S2logHPD", "logHPDdiff", "sqrtS2RD1K", "sqrtS2RD50K", "RD1Kdiff", "RD50Kdiff")])
 
-### some colinearity problems lets drop sqrtS2RD50k
-
-corvif(TPD_data[,c("Cont", "logdist", "rt3env", "S2logHPD","logHPDdiff", "sqrtS2RD1K", "RD1Kdiff", "RD50Kdiff")])
 
 
 ```
 
-```{r Overlap Modeling, eval = FALSE , echo=FALSE}
+```{r Overlap Modeling, warning=FALSE}
 
 
 ################################
@@ -795,7 +794,7 @@ MOD_AIC <- data.frame(Mod1 = AIC(Model_1),Mod2 = AIC(Model_2),Mod3 = AIC(Model_3
 Model 2 and 6 have the lowest AIC scores, however both they have singular fits therefore, I will proceed with Model 1 which is the next model with the most support so we will carry on without any random slopes. Next stage is to perform backwards stepwise model simplification based on the liklihood ratio distribution test on 1000 permuted datasets.
 
 
-```{r permuted data, eval = FALSE , echo=FALSE}
+```{r permuted data,warning=FALSE, message=FALSE,comment=FALSE}
 
 
 Permuted_data <- rep(list(NA),1000)
@@ -886,7 +885,7 @@ mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove
 
 Model_simp <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
-
+Model_simp
 ### Could drop all but Cont:logdist and Cont:S2logHPD shows the lowest probability of significantly lowering the explanatory
 ### power of the model 
 
@@ -912,6 +911,7 @@ mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_7, remove
 
 Model_simp2 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
+Model_simp2
 ### remove Cont:sqrtS2RD1k
 
 Model_8 <- update(Model_7, ~.-RD50Kdiff)
@@ -938,7 +938,7 @@ mod_sim4 <- Permuted_model_simplification(Permuted_data,model1 = Model_8, remove
 
 Model_simp3 <- rbind(mod_sim1,mod_sim2,mod_sim3,mod_sim4)
 
-
+Model_simp3
 
 ### remove interaction Cont:RD50Kdiff
 
@@ -961,7 +961,7 @@ mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_9, remove
 ##### S2 RD50k
 Model_simp4 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
-
+Model_simp4
 #### Can remove RD50Kdiff
 
 Model_10 <- update(Model_9, ~.-Cont:logHPDdiff)
@@ -983,7 +983,9 @@ mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_10, remov
 ##### S2 RD50k
 Model_simp5 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
-## Can't remove either of the S2 effects while the diff variable is in the model therefore Cont:rt3env interaction is removed
+
+Model_simp5
+## Can remove logHPDdiff
 
 Model_11 <- update(Model_10, ~.-logHPDdiff)
 
@@ -1003,8 +1005,10 @@ mod_sim3 <- Permuted_model_simplification(Permuted_data,model1 = Model_11, remov
 ##### S2 RD50k
 Model_simp6 <- rbind(mod_sim1,mod_sim2,mod_sim3)
 
+Model_simp6
 
 
+##can remove S2logHPD
 
 Model_12 <- update(Model_11, ~.-S2logHPD)
 
@@ -1023,8 +1027,8 @@ mod_sim2 <- Permuted_model_simplification(Permuted_data,model1 = Model_12, remov
 
 Model_simp7 <- rbind(mod_sim1,mod_sim2)
 
+Model_simp7
 
-summary(Model_12)
 ```
 
 Finally testing the removal of all other fixed effects and interactions in the model I have found that `Model_12` is the best model where these removals result in a model with significantly less explanatory power based on the permuted datasets.
@@ -1032,18 +1036,12 @@ Finally testing the removal of all other fixed effects and interactions in the m
 Looking more closely at the model output we can see that the similarity of communities compared to that of primary minimally used sites 
 
 
-``` {r final Overlap Model , echo=FALSE, eval = FALSE}
-Overlap_data <- readRDS("Functional_Intactness_Index/Overlap_modelling_data.rds")
+``` {r final Overlap Model}
 
 
 
 
-Anova(Model_12,type = "III")
-
- ### next we will remove the interaction between the interaction between sqrts2RD50k
 summary(Model_12)
-
-AIC(Model_12)
 
 resid_panel(Model_12)
 
