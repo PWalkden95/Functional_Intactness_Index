@@ -64,14 +64,9 @@ hist(PREDICTS_site$Unbias_Rao, breaks = 20)
 ```{r}
 qqPlot(PREDICTS_site$Unbias_Rao)
 ```
-QQ plot has identified `DI1_2010__Milder 2  41` and `GN1_2007__VanBael 1 9 64` as potential outliers. Looking at the makeup of the sites it seems that `DI1_2010__Milder 2  41` is completely dominated by a single species *Dives dives* and from that I noticed `DI1_2010__Milder 2  48` is also dominated by *Bubulcus ibis* as well which is really skewing the calculation of the estimator. I looked at the original study published by [Milder et al 2010](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES10-00003.1) and I think there was an input error as Table 3 doesn't indicate the number of individuals being that high. So I don't know whether to exclude the data points or go back and recalculate the FD for the sites while correcting for sites that are dominated by a single species (possibly wrongly). For now I'll drop them. 
+QQ plot has identified `DI1_2010__Milder 2  41` and `GN1_2007__VanBael 1 9 64` as potential outliers. Looking at the makeup of the sites it seems that `DI1_2010__Milder 2  41` is completely dominated by a single species *Dives dives* and from that I noticed `DI1_2010__Milder 2  48` is also dominated by *Bubulcus ibis* as well which is really skewing the calculation of the estimator. I looked at the original study published by [Milder et al 2010](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES10-00003.1) and it looks like these large values are due to large flocks of birds being counted within the site. There could be a couple of ways to deal with these influential results due to a single species dominating a site and therefore skewing the FD metric, first we could reduced the influence of the species in the calculation of Rao's Q (by what means I'm unsure - possibly introduce a maximum threshold for the number of individuals of a single species that can occur within a site?) or reduce the influence of the final data point at the modelling stage - this can be done by producing "robust" estimates of the final model using robust linear mixed effects models that downweight points that are considered to be outliers. For now I have gone with the latter.   
 
 With `GN1_2007__VanBael 1 9 64` I don't know whether to drop it may be a true value of biological relevance.
-
-```{r}
-PREDICTS_site <- PREDICTS_site[-c(41,48),]
-rownames(PREDICTS_site) <- seq(1,nrow(PREDICTS_site),1)
-```
 
 Next we'd like to have a look at how the distribution of land use types and intensities we have across our modeled sites.
 
@@ -138,6 +133,7 @@ Next I am going to check for colinearity in the predictor variables, but beforeh
 PREDICTS_site$logHPD <- scale(PREDICTS_site$logHPD)
 PREDICTS_site$RD1k <- scale(PREDICTS_site$density_1km^(1/2))
 PREDICTS_site$RD50k <- scale(PREDICTS_site$density_50km^(1/2))
+PREDICTS_site$CNTRLlogHPD <- scale(PREDICTS_site$CNTRLlogHPD)
 
 
 #source("https://highstat.com/Books/Book2/HighstatLibV10.R")
@@ -165,18 +161,17 @@ all_bird_tree <- all_bird_tree[[1]]
 #### Unifrac for all sites among studies ####
 #############################################
 
-
 create_vcv <- function(data, level) {
   
-  data <- droplevels(data)
+  data <- data.frame(droplevels(data))
   species <- sub(unique(data$Jetz_Name),pattern = " " ,replacement = "_")
   drop.species <- all_bird_tree$tip.label[which(!(all_bird_tree$tip.label %in% species))]
 
   
   overall_tree <- drop.tip(all_bird_tree, drop.species)
   
-  
-  ID <- as.character(unique(PREDICTS_site[, level]))
+  site_data <- data.frame(PREDICTS_site)
+  ID <- as.character(unique(site_data[, level]))
   
   comm_data <- t(species)
   colnames(comm_data) <- species
@@ -203,7 +198,7 @@ create_vcv <- function(data, level) {
   
   comm_data <- as.matrix(comm_data)
   
-  suppressWarnings(memory.limit(120000))
+
   
   vcv <- 1 - as.matrix(unifrac(comm = comm_data, tree = overall_tree))
  
@@ -214,7 +209,7 @@ create_vcv <- function(data, level) {
 }
 
 
-#site_vcv <- among_site_unifrac(PREDICTS_abundance, level = "SSBS")
+site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
   
   #write_rds(file = "../Functional_Intactness_Index/Outputs/site_vcv.rds", site_vcv)
 ```
