@@ -651,7 +651,16 @@ Similarity_data <- readRDS("Outputs/similarity_data.rds")
 hist(TPD_data$TPD_Overlap)
 hist(car::logit(TPD_data$TPD_Overlap, adjust = 0.001, percents = FALSE))
 
+hist(TPD_data$S2logHPD)
 
+hist(TPD_data$S2RD50K)
+hist(sqrt(TPD_data$S2RD50K))
+
+hist(TPD_data$S2RD1K)
+hist(TPD_data$S2RD1K^(1/2))
+
+hist(TPD_data$env_distance)
+hist(TPD_data$env_distance^(1/3))
 ## because the similarity metric is bound between 0 and 1 and i performed a logit transformation as well as taking the log of the geographic distance and applying other transformations to the variables
 
 ### Want to work out human population density at 
@@ -1037,7 +1046,9 @@ Looking more closely at the model output we can see that the similarity of commu
 
 
 ``` {r final Overlap Model}
-
+Model_12 <- lmer(formula = logitOver ~ Cont + logdist + rt3env + sqrtS2RD1K + 
+                   RD1Kdiff + CNTRLlogHPD + (1 | SS) + Cont:logdist + Cont:RD1Kdiff, 
+                 data = TPD_data)
 
 
 

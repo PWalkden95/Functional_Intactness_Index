@@ -3,153 +3,88 @@ PREDICTS_site <- PREDICTS_site %>% droplevels()
 
 
 
-Rao_Model_1b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_1b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
-                                       (1|SS) + (1|SSB), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB), data = PREDICTS_site)
 
 
-summary(Rao_Model_1b)
+
 
 #### lets see what random effect structure gives the best AIC 
 
 ### adding random slopes 1) LUI within study 
 
 
-Rao_Model_2b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_2b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site)
 
-summary(Rao_Model_2b)
 
 #2) logHPD within study 
 
 
 
-Rao_Model_3b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_3b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
-                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (logHPD|SS), data = PREDICTS_site)
 
-summary(Rao_Model_3b)
 
 #3) Road Density_1km within study  
 
 
-Rao_Model_4b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_4b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
-                                       (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site, bayes = TRUE)
+                                       (1|SS) + (1|SSB) + (RD1k|SS), data = PREDICTS_site)
 
-summary(Rao_Model_4b)
 
 # 4) RD50km within study 
 
 
-Rao_Model_5b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
+Rao_Model_5b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
                                        LUI:logHPD + LUI:RD1k + LUI:RD50k +
-                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_5b)
+                                       (1|SS) + (1|SSB) + (RD50k|SS), data = PREDICTS_site)
 
 
 
+Random_DIC <- data.frame(mod1 = AIC(Rao_Model_1b), mod2 = AIC(Rao_Model_2b),mod3 = AIC(Rao_Model_3b),
+                         mod4 = AIC(Rao_Model_4b), mod5 = AIC(Rao_Model_5b))
 
-Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 = Rao_Model_3b$DIC,
-                         mod4 = Rao_Model_4b$DIC, mod5 = Rao_Model_5b$DIC)
+Anova(Rao_Model_1b)
 
 
+## remove LUI:RD50k
 
-Rao_Model_6b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
-                                       LUI:logHPD + LUI:RD1k  +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
+Rao_Model_6b <-  lmer(Unbias_Rao ~ LUI + logHPD + RD1k + RD50k + CNTRLlogHPD +
+                         LUI:logHPD + LUI:RD1k +
+                         (1|SS) + (1|SSB), data = PREDICTS_site)
 
-summary(Rao_Model_6b)
+anova(Rao_Model_6b, Rao_Model_1b)
 
-Rao_Model_6b$DIC - Rao_Model_2b$DIC
 
-########
-Rao_Model_7b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k +
-                                       LUI:logHPD + LUI:RD1k  +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
+### proceed
 
-summary(Rao_Model_7b)
+Anova(Rao_Model_6b)
 
-Rao_Model_7b$DIC - Rao_Model_6b$DIC #### didnt reduce enough
+Rao_Model_7b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
+                       LUI:logHPD + LUI:RD1k +
+                       (1|SS) + (1|SSB), data = PREDICTS_site)
 
-#### LUI: RD1k
+anova(Rao_Model_6b, Rao_Model_7b)
 
-Rao_Model_8b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
+
+Anova(Rao_Model_7b)
+
+Rao_Model_8b <- lmer(Unbias_Rao ~ LUI + logHPD + RD1k + CNTRLlogHPD +
+                       LUI:logHPD +
+                       (1|SS) + (1|SSB), data = PREDICTS_site)
+
+anova(Rao_Model_7b, Rao_Model_8b)
+
+
+### proceed 
+
+Anova(Rao_Model_8b)
 
 summary(Rao_Model_8b)
 
-Rao_Model_8b$DIC - Rao_Model_6b$DIC  ## Much reduce
-
-### 
-
-Rao_Model_9b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_9b)
-
-Rao_Model_9b$DIC - Rao_Model_8b$DIC  ## nope reduce
-
-## RD1k
-
-Rao_Model_10b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD50k +
-                                       LUI:logHPD  +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_10b)
-
-Rao_Model_10b$DIC - Rao_Model_8b$DIC  ## Much increase
-
-### LUI:loghpd
-
-Rao_Model_11b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k + RD50k +
-                                       (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_11b)
-
-Rao_Model_11b$DIC - Rao_Model_8b$DIC  ## Much reduce
-
-####      RD50k
-
-
-Rao_Model_12b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD1k +
-                                        (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_12b)
-
-Rao_Model_12b$DIC - Rao_Model_11b$DIC  ## not enough
-
-
-
-#### RD1k
-
-Rao_Model_13b <- phyr::communityPGLMM(Bias_Rao ~ LUI + logHPD + RD50k +
-                                        (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_13b)
-
-Rao_Model_13b$DIC - Rao_Model_11b$DIC  ## Much increase
-
-##logHPD
-
-Rao_Model_14b <- phyr::communityPGLMM(Bias_Rao ~ LUI  + RD1k + RD50k +
-                                        (1|SS) + (1|SSB) + (LUI|SS), data = PREDICTS_site, bayes = TRUE)
-
-summary(Rao_Model_14b)
-
-Rao_Model_14b$DIC - Rao_Model_11b$DIC  ## nope modell 11b best again
-
-
-summary(Rao_Model_11b)
-
-
-
-
-Model_12 <- lmerTest::lmer(formula = logitOver ~ Cont + logdist + rt3env + sqrtS2RD1K + 
-                   RD1Kdiff + CNTRLlogHPD + (1 | SS) + Cont:logdist + Cont:RD1Kdiff, 
-                 data = TPD_data)
-summary(Model_12)
+resid_panel(Rao_Model_8b)
