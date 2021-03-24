@@ -19,232 +19,9 @@ require(sf)   ### for calculate density of roads
 require(rgeos) ## ditto 
 require(lwgeom) ### ditto
 
-#### Load in the relevant datasets that will be collated to get all relevant information for FII calculations
 
-Forage <- readRDS("../Datasets/GBD/Trophic_Foraging_Niche.rds")
-PREDICTS <- readRDS("../Datasets/PREDICTS/diversity-2021-02-24-03-32-59.rds")
-PREDICTS_Taxonomy <- readRDS("../Datasets/PREDICTS/PREDICTS_AVES_Updated_Taxonomy.rds")
-Jetz_Traits <- read.csv("../Datasets/GBD/GBD_Jetz_averages_11_Nov_2020.csv")
-
-colnames(Jetz_Traits)[1] <- "Jetz_Name" 
-
-#### Subset the PREDICTS database to just include the Class Aves resolved to the species level and add in species level
-#### Trophic niche and morphometric trait measurements 
-
-PREDICTS_Aves <- PREDICTS %>% filter(Rank == "Species", Class == "Aves") %>% left_join(PREDICTS_Taxonomy[,c("Taxon", "Jetz_Name")], by = "Taxon") %>%
-  left_join(Forage[,c(34:46)], by = c("Jetz_Name" = "Taxon")) %>%
-  left_join(Jetz_Traits[,c(1,8:18)], by = "Jetz_Name")
-
-### So as we are just going to practise the workflow for FII I will subset just those sites in the Americas
-
-
-PREDICTS_Aves_Am <- PREDICTS_Aves %>% filter(UN_region == "Americas")
-
-## Lets take a look at the sites in Americas 
-
-table(PREDICTS_Aves_Am$Predominant_habitat, PREDICTS_Aves_Am$Use_intensity)
-
-### so looking at this it would be good to collapse secondary vegetation into a single
-### Land Use type and since there was not enough combinations of all Land_use type and 
-### intensity create a new factor of LandUse Intensity 
-
-PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>% dplyr::mutate(LandUse = ifelse(grepl(pattern = "secondary", tolower(Predominant_habitat)), "Secondary Vegetation", paste(Predominant_habitat)),
-                                                       LandUse = ifelse(grepl(LandUse, pattern = "Primary"), "Primary", paste(LandUse)),
-                                                       
-                                                       LandUse = ifelse(LandUse == "Cannot decide", NA, paste(LandUse)),
-                                                       
-                                                       Intensity = ifelse(Use_intensity == "Cannot decide", NA, paste(Use_intensity)),
-                                                       
-                                                       LandUse_Intensity = ifelse(is.na(Use_intensity), NA, paste(LandUse, Intensity, sep = "_")),
-                                                       LandUse_Intensity = ifelse(grepl("NA", LandUse_Intensity), NA, paste(LandUse_Intensity)),
-                                                       
-                                                       LandUse_Intensity = factor(LandUse_Intensity),
-                                                       
-                                                       LandUse_Intensity = relevel(LandUse_Intensity, "Primary_Minimal use")) %>%
-  dplyr::filter(!is.na(LandUse_Intensity)) %>%
-  
-  droplevels()
-
-table( PREDICTS_Aves_Am$LandUse, PREDICTS_Aves_Am$Intensity)
-
-#### Visulise the sites geographically
-
-wm<-map_data("world") %>% filter(region != "Antartica" ) %>% fortify()
-
-## site coords
-
-site_points <- PREDICTS_Aves_Am %>% distinct(SSBS,Longitude,Latitude)
-
-# generate and plot map
-
-site_plot<-ggplot()+ coord_fixed()+
-  geom_map(data =wm, map = wm,
-           aes(group = group, map_id= region),
-           fill = "darkgrey")+
-  geom_point(data = fortify(site_points), aes(Longitude, Latitude),
-             colour = "blue", size = 1)+
-  theme_classic()
-
-plot(site_plot)
-
-
-### Correct for sampling effort at each site assuming that measurement increases linearly with sampling effort
-### Rescale sampling effort so that its between 0 and 1 by dividing samplin effort at site by the max sampling effort within the study
-
-
-PREDICTS_Aves_Am <- PREDICTS_Aves_Am %>% 
-  
-  
-  dplyr::group_by(SS) %>% ## group by study 
-  
-  dplyr::mutate(Max_Sampling_Effort = max(Sampling_effort)) %>%  # max samplin effort in each site
-  
-  dplyr::ungroup() %>%
-  
-  dplyr::mutate(Rescaled_Sampling_Effort = Sampling_effort/Max_Sampling_Effort) %>%  ## rescale sampling effort so that the maximum effort with a study is 1
-  
-  dplyr::filter(Diversity_metric_type =="Abundance" | Diversity_metric_type ==  "Occurrence") %>%
-  
-  dplyr::mutate(Effort_Corrected_Measurement = ifelse(Diversity_metric_is_effort_sensitive == TRUE,
-                                                      Measurement/Rescaled_Sampling_Effort,
-                                                      Measurement)) %>%
-  
-  droplevels()
-
-## Now the Biodiversity data is ready to be used 
-
-write_rds(PREDICTS_Aves_Am, "../Datasets/PREDICTS/PREDICTS_Americas_Aves.rds")
-
-### To be able to calculate our metric of functional diversity at the site level we need to have 
-### abundance of each species in each site (rescaled), fucntional distances between PCAs of morphometric traits
-### and PCoA of species foraging and trophic niches - we have rescaled and relative abundance of species at each site within study 
-
-
-
-###### We are going to generate major axes of variation with the morphometric traits using a two-step PCA proposed by Trisos et al 2014
-#####  Most traits were positively correlated due to their positive association with body size, therefore to derive independant axes of trait
-### variation I performed two PCAs. First, on Locomotory traits (Tarsus, Wing and tail) and second on Foraging traits (Beak Dimensions) - The first 
-### PC of each PCA would represent an index of body size and another PCA on these scores would resolve the axes to one dimension.The two subsequent
-### PCs in each of the first PCAs would represent an axis of locomotory and Foraging traits respectively. 
-
-
-
-## Just get the columns with the morphometric trait data
-PCA_Data <- data.frame(PREDICTS_Aves_Am[,c("Jetz_Name", "Bill.TotalCulmen", "Bill.Nares", "Bill.Width", "Bill.Depth", "Tarsus.Length",    "Kipp.s.Distance", "Secondary1", "Wing.Chord", "Hand.Wing.Index", "Tail.Length", "Mass")])
-
-PCA_Data <- distinct(PCA_Data, Jetz_Name, .keep_all = TRUE)
-
-
-#### Log transform - then standardise and centre for a mean of zero and a standard deviation of 1
-
-PCA_Data <- data.frame(Jetz_Name = PCA_Data[,1], scale(log(PCA_Data[c(2:12)])))
-
-### Perform a PCA on all the traits - This is just used to compare the utility of the Two-step PCA as opposed to just a single full PCA
-
-Full.pca.data <- PCA_Data[,c(2:6,8:9,11)]
-
-Full.pca <- prcomp(Full.pca.data, center = TRUE, scale. = TRUE)
-
-summary(Full.pca)
-Full.pca
-
-
-### PCA on the Foraging traits - Beak Dimensions
-
-For.pca.data <- PCA_Data[,c(2:5)]
-
-For.pca <- prcomp(For.pca.data, center = TRUE, scale. = TRUE)
-For.pca
-summary(For.pca)
-
-### PCA on the Locomotory traits - Tarsus, tail and wing dimensions
-
-Loco.pca.data <- PCA_Data[,c(6,8,9,11)]
-
-Loco.pca <- prcomp(Loco.pca.data, center = TRUE, scale. = TRUE)
-Loco.pca
-summary(Loco.pca)
-
-
-#### Final PCA on the first Principal component of each of the first PCAs to derive an axis of body size 
-
-Body.pca.data <- data.frame(LocoPC1 = Loco.pca$x[,1], ForPC1 = For.pca$x[,1])
-Body.pca <- prcomp(Body.pca.data, center = TRUE, scale. = TRUE)
-
-Body.pca
-summary(Body.pca)
-
-
-
-### Match the independent axes of trait variation to species in PREDICTS 
-
-PC_Scores <- data.frame(Jetz_Name = PCA_Data[,1], Foraging.PCA = For.pca$x[,2], Loco.PCA = Loco.pca$x[,2], Body.PCA = Body.pca$x[,1])
-
-
-### standardize the PC scores so that the maximum value is 1
-
-for(col in colnames(PC_Scores[,-1])){
-  PC_Scores[,col] <- PC_Scores[,col]/max(PC_Scores[,col])
-}
-
-
-write_rds(file = "Outputs/PC_Scores.rds", PC_Scores)
-###### To determine variation in dietary and foraging niches I performed an Principal Coordinate analysis
-
-PCoA_Data <- data.frame(PREDICTS_Aves_Am[,c(90:99)])
-PCoA_Data <- distinct(PCoA_Data, Jetz_Name, .keep_all = TRUE)
-
-
-rownames(PCoA_Data) <- PCoA_Data$Jetz_Name
-PCoA_Data <- PCoA_Data[,(2:10)]
-
-### calculate manly distances between species based on the proportion of diet obattain from different foraging or trophic guild. 
-
-Manly <- dist.prop(PCoA_Data,1)
-
-## the function cmdscale performs the principal coordinate analysis. 
-
-ForPCoA <- cmdscale(Manly, eig = TRUE, x.ret = TRUE, k = 8)
-
-### extract the proportion of variance explain by each PCoA axis and then the point of each species no the first two axes. 
-
-PCoAVar <- round(ForPCoA$eig/sum(ForPCoA$eig)*100,1)
-mds.values <- ForPCoA$points
-mds.data <- data.frame(X = mds.values[,1], Y = mds.values[,2])
-
-## Visualise
- 
-ggplot(data = mds.data, aes(x= X, y = Y)) +
-  geom_point() +
-  theme_bw() +
-  xlab(paste("PCoA1 - ", PCoAVar[1], "%", sep = "")) +
-  ylab(paste("PCoA2 - ", PCoAVar[2], "%", sep = ""))
-
-
-PCoA_Scores <- data.frame(Jetz_Name = rownames(PCoA_Data), PCoA1 = mds.values[,1], PCoA2 = mds.values[,2], PCoA3 = mds.values[,3], PCoA4 = mds.values[,4])
-
-Manly_t <- dist.prop(data.frame(t(PCoA_Data)),1)
-
-Axes_PCo <- cmdscale(Manly_t, eig = TRUE, x.ret = TRUE, k = 8)
-
-Axes_PCo$points
-
-
-
-#########################################
-############# Trait Data ################
-#########################################
-
-trait_data <- data.frame(PREDICTS_Aves_Am) %>% dplyr::select(Jetz_Name) %>%
-  left_join(PC_Scores, by = "Jetz_Name") %>% 
-  left_join(PCoA_Scores, by = "Jetz_Name") %>%
-  distinct(Jetz_Name, .keep_all = TRUE)
-
-### standardise the PCA and PcoA scores
-
-for(col in colnames(trait_data[,-1])){
-  trait_data[,col] <- trait_data[,col]/max(trait_data[,col])
-}
+PREDICTS_Aves_Am <- readRDS("../Datasets/PREDICTS/PREDICTS_Americas_Aves.rds")
+traits <- readRDS("Outputs/MeanTraits.rds")
 
 
 #######################################
@@ -304,110 +81,25 @@ abundance_data <- PREDICTS_Aves_Am %>% dplyr::filter(Diversity_metric == "abunda
 
 
 
-write_rds(abundance_data, file = "Outputs/abundance_data.rds")
+write_rds(abundance_data, file = "Outputs/Rao_abundance_data.rds")
 
 
-morpho_traits <- readRDS("Outputs/PC_Scores.rds")
 
 #####################################################
 #### Function to calculate Rao's Q for each site ####
 ####################################################
 
-
-Rao_Q_Func <- function(data, traits){
-  
-  ### get the list of uncique species across teh whole dataset
-  
-  Species_abundance <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
-  
-  ### loop over every site in the dataset to collate the relative abundance of each species
-  
-  for(site in levels(data$SSBS)){
-    
-    Spp_abd <- data %>% filter(SSBS == site) %>% droplevels() %>% data.frame()
-    
-    
-    ### Join species withining site to dataframe and rename column as site name
-    
-    Species_abundance <- Species_abundance %>% left_join(Spp_abd[,c("Jetz_Name", "RelativeAbundance")], by = "Jetz_Name")
-    colnames(Species_abundance)[which(colnames(Species_abundance) == "RelativeAbundance")] <- paste(site)
-  }
-  
-  ## rename rows as species and drop column from dataset 
-  
-  rownames(Species_abundance) <- Species_abundance$Jetz_Name
-  Species_abundance <- as.matrix(Species_abundance[,-1])
-  
-  ## Nas to zeros
-  
-  Species_abundance[is.na(Species_abundance)] <- 0  
-  
-  ### Join all species in datasets traits scores
-  
-  spp_traits <- traits %>% filter(Jetz_Name %in% rownames(Species_abundance))
-  rownames(spp_traits) <- spp_traits$Jetz_Name
-  spp_traits <- spp_traits[,-1]
-  
-
-  
-  Rao_Bias <- rao.diversity(comm = t(Species_abundance),traits =  spp_traits)    #THIS is using the package SYNCSA that calcuates Rao's using gowdis 
-  
-  ######################################################################
-  ########## Here we are also going to calculate an "unbiased" Raos Q###
-  ######################################################################
-  
-  
-  Species_abundance_2 <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
-  
-  ### loop over every site in the dataset to collate the relative abundance of each species
-  
-  for(site in levels(data$SSBS)){
-    
-    Spp_abd <- data %>% filter(SSBS == site) %>% droplevels() %>% data.frame()
-    
-    
-    ### Join species withining site to dataframe and rename column as site name
-    
-    Species_abundance_2 <- Species_abundance_2 %>% left_join(Spp_abd[,c("Jetz_Name", "SpeciesSiteAbundance")], by = "Jetz_Name")
-    colnames(Species_abundance_2)[which(colnames(Species_abundance_2) == "SpeciesSiteAbundance")] <- paste(site)
-  }
-  
-  ## rename rows as species and drop column from dataset 
-  
-  rownames(Species_abundance_2) <- Species_abundance_2$Jetz_Name
-  Species_abundance_2 <- as.matrix(Species_abundance_2[,-1])
-  
-  ## Nas to zeros
-  
-  Species_abundance_2[is.na(Species_abundance_2)] <- 0  
-  
-  
-  comm <- t(Species_abundance_2)
- 
-  ##Load in altered SYNCSA function to calculate Rao's Q unbias 
-  source("Functions/Rao_Diversity_2.R")
-  
-  
-   Rao_Unbias <- rao_diversity_2(comm = comm, traits = spp_traits)
-   Rao_Unbias <- Rao_Unbias$FunRao
-  
-  
-  Rao <- data.frame(Bias = as.numeric(Rao_Bias$FunRao),
-                    Unbias = Rao_Unbias)
-  
-  
-  
-  return(Rao)
-}
+source("Functions/Site_Rao_Q.R")
 
 
-PREDICTS_Site_Rao <- data.frame(abundance_data) %>% distinct(SSBS, .keep_all = TRUE)%>% dplyr::select(SS, SSB, SSBS,UN_subregion, LandUse, Use_intensity, LandUse_Intensity, Longitude,Latitude, site_species)
+PREDICTS_Site_Rao <- data.frame(abundance_data) %>% distinct(SSBS, .keep_all = TRUE) %>% 
+  dplyr::select(SS, SSB, SSBS,UN_subregion, LandUse, Use_intensity, LandUse_Intensity, Longitude,Latitude, site_species)
 
 PREDICTS_Site_Rao$SSBS <- as.character(PREDICTS_Site_Rao$SSBS)
 PREDICTS_Site_Rao$Bias_Rao <- NA
 PREDICTS_Site_Rao$Unbias_Rao <- NA
 
-Rao_data <- Rao_Q_Func(abundance_data,morpho_traits)
+Rao_data <- Rao_Q_Func(abundance_data,traits[["morpho_traits"]])
 
 PREDICTS_Site_Rao$Bias_Rao <- Rao_data$Bias
 PREDICTS_Site_Rao$Unbias_Rao <- Rao_data$Unbias
@@ -453,7 +145,7 @@ Similarity_data <- data.frame(PREDICTS_Aves_Am) %>% filter(Effort_Corrected_Meas
   ### calculating a hypervolume in 3 dimensions with fewer than 21 species on result in inaccurcies 
   group_by(SSBS) %>% dplyr::mutate(Site_spp = n_distinct(Jetz_Name),TotalSiteAbundance = sum(SpeciesSiteAbundance)) %>%
   
-  filter(Site_spp > 21) %>% ungroup() %>%
+  filter(Site_spp > 1) %>% ungroup() %>%
   
   group_by(SS) %>% dplyr::mutate(n_primary_min = sum(LandUse_Intensity == "Primary_Minimal use" ), n_sites_within_studies = n_distinct(SSBS)) %>% ungroup() %>%
   
@@ -483,7 +175,6 @@ write_rds(Similarity_data, file = "Outputs/similarity_data.rds")
 studies <- levels(Similarity_data$SS) 
 
 #### empty data frame for results to go into 
-
 
 
 registerDoParallel(cores = 4)
@@ -563,56 +254,57 @@ Overlap_data <- foreach(study = studies,
                           ### Also want to add in a variable for the minimum number of species in either of the sites used to construct the hypervolumes. This will be used as weights in the models as there may be greater uncertainty in the hypervolume overlaps when fewer species have been recorded at either site.
                           
                           
-                          for(i in 1:NROW(site_comparisons)){
-                            
-                            
-                            ##### get the species in both sites being compared 
-                            
-                            site1 <- site_comparisons[i,"site1"]
-                            site1_spp <- Similarity_data %>% filter(SSBS == site1) %>% distinct(Jetz_Name, .keep_all = FALSE)
-                            
-                            
-                            ### join the traits and drop species names
-                            
-                            site1_data <- site1_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
-                            rownames(site1_data) <- site1_data$Jetz_Name
-                            site1_data <- as.matrix(site1_data[,-1])
-                            
-                            
-                            ### calculate support vector machine and minimum convex hull hypervolumes 
-                            
-                            hypersvm_1 <- hypervolume(site1_data, method = "svm")
-                            #convex_1 <- expectation_convex(site1_data, check.memory = FALSE)
-                            
-                            
-                            ### site 2
-                            
-                            site2 <- site_comparisons[i,"site2"]
-                            site2_spp <- Similarity_data %>% filter(SSBS == site2) %>% distinct(Jetz_Name, .keep_all = FALSE)
-                            
-                            site2_data <- site2_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
-                            rownames(site2_data) <- site2_data$Jetz_Name
-                            site2_data <- as.matrix(site2_data[,-1])
-                            
-                            hypersvm_2 <- hypervolume(site2_data, method = "svm")
-                            #convex_2 <- expectation_convex(site2_data, check.memory = FALSE)
-                            
-                            svm_list <- hypervolume_set(hypersvm_1,hypersvm_2, check.memory = FALSE)
-                            #convex_list <- hypervolume_set(convex_1, convex_2, check.memory = FALSE)
-                            
-                            svm_overlap <- hypervolume_overlap_statistics(svm_list)
-                            #convex_overlap <- hypervolume_overlap_statistics(convex_list)
-                            
-                            study_data[i,"hyper_overlap"] <- svm_overlap[1]
-                            #study_data[i,"convex_overlap"] <- convex_overlap[1]
-                            
-                          }
+                          # for(i in 1:NROW(site_comparisons)){
+                          #   
+                          #   
+                          #   ##### get the species in both sites being compared 
+                          #   
+                          #   site1 <- site_comparisons[i,"site1"]
+                          #   site1_spp <- Similarity_data %>% filter(SSBS == site1) %>% distinct(Jetz_Name, .keep_all = FALSE)
+                          #   
+                          #   
+                          #   ### join the traits and drop species names
+                          #   
+                          #   site1_data <- site1_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
+                          #   rownames(site1_data) <- site1_data$Jetz_Name
+                          #   site1_data <- as.matrix(site1_data[,-1])
+                          #   
+                          #   
+                          #   ### calculate support vector machine and minimum convex hull hypervolumes 
+                          #   
+                          #   hypersvm_1 <- hypervolume(site1_data, method = "svm")
+                          #   #convex_1 <- expectation_convex(site1_data, check.memory = FALSE)
+                          #   
+                          #   
+                          #   ### site 2
+                          #   
+                          #   site2 <- site_comparisons[i,"site2"]
+                          #   site2_spp <- Similarity_data %>% filter(SSBS == site2) %>% distinct(Jetz_Name, .keep_all = FALSE)
+                          #   
+                          #   site2_data <- site2_spp %>% left_join(PC_Scores, by = "Jetz_Name") 
+                          #   rownames(site2_data) <- site2_data$Jetz_Name
+                          #   site2_data <- as.matrix(site2_data[,-1])
+                          #   
+                          #   hypersvm_2 <- hypervolume(site2_data, method = "svm")
+                          #   #convex_2 <- expectation_convex(site2_data, check.memory = FALSE)
+                          #   
+                          #   svm_list <- hypervolume_set(hypersvm_1,hypersvm_2, check.memory = FALSE)
+                          #   #convex_list <- hypervolume_set(convex_1, convex_2, check.memory = FALSE)
+                          #   
+                          #   svm_overlap <- hypervolume_overlap_statistics(svm_list)
+                          #   #convex_overlap <- hypervolume_overlap_statistics(convex_list)
+                          #   
+                          #   study_data[i,"hyper_overlap"] <- svm_overlap[1]
+                          #   #study_data[i,"convex_overlap"] <- convex_overlap[1]
+                          #   
+                          # }
                           
                           return(study_data)
                           }
                           
                         }
 
+table(Overlap_data$Contrast)
 
 
 registerDoSEQ()

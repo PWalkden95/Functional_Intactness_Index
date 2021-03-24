@@ -15,7 +15,7 @@ require(robustlmm)
 ## Load in the datasets
 
 PREDICTS_site <- readRDS("Outputs/PREDICTS_Site_Rao.rds")
-PREDICTS_abundance <- readRDS("Outputs/abundance_data.rds")
+PREDICTS_abundance <- readRDS("Outputs/Rao_abundance_data.rds")
 
 
 
@@ -91,67 +91,21 @@ corvif(PREDICTS_site[,c( "LUI", "logHPD",  "RD1k","RD50k")])
 #### Load in Phylogeny - just tae the first one when running the inital models 
 
 
-all_bird_tree <- read.tree("Datasets/AllBirdsHackett1.tre")
+all_bird_tree <- read.tree("../Datasets/AllBirdsHackett1.tre")
 all_bird_tree <- all_bird_tree[[1]]
 
-
+unique(data[,level])
 
 #############################################
 #### Unifrac for all sites among studies ####
 #############################################
 
 
-create_vcv <- function(data, level) {
-  
-  data <- droplevels(data)
-  species <- sub(unique(data$Jetz_Name),pattern = " " ,replacement = "_")
-  drop.species <- all_bird_tree$tip.label[which(!(all_bird_tree$tip.label %in% species))]
+source("Functions/create_vcv.R")
 
-  
-  full_tree <- drop.tip(all_bird_tree, drop.species)
-  
-  
-  ID <- as.character(unique(PREDICTS_site[, level]))
-  
-  comm_data <- t(species)
-  colnames(comm_data) <- species
-  comm_data <- data.frame(comm_data[-1,])
-  
-  
-  
-  for(i in 1:length(ID)){
-    
-    ID_data <- data.frame(data[data[,level] == ID[i],c("Jetz_Name", "Effort_Corrected_Measurement")])
-    
-    for(spp in species){
-      comm_data[i,paste(spp)] <- ifelse(any(ID_data[ID_data$Jetz_Name == sub(spp,pattern = "_", replacement = " "),"Effort_Corrected_Measurement"] > 0),1,0)
-    }
-    
-    
-    rownames(comm_data)[i] <- ID[i]
-  }
-  
-  
-  for(i in 1:ncol(comm_data)){
-    comm_data[,i] <- as.numeric(comm_data[,i])
-  }
-  
-  comm_data <- as.matrix(comm_data)
-  
-  suppressWarnings(memory.limit(120000))
-  
-  vcv <- 1 - as.matrix(unifrac(comm = comm_data, tree = full_tree))
- 
-  
+site_vcv <- create_vcv(data = PREDICTS_abundance, level = "SSBS", tree = all_bird_tree)
 
-  
-  return(vcv)  
-}
- 
-
-among_site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
-
-  write_rds(file = "Functional_Intactness_Index/Site_Among_Study_Vcv.rds", among_site_vcv)
+write_rds(file = "Outputs/site_vcv.rds", site_vcv)
   
   
 ########################################################################################################################
@@ -165,7 +119,7 @@ among_site_vcv <- create_vcv(PREDICTS_abundance, level = "SSBS")
   
 PREDICTS_site <- PREDICTS_site %>% droplevels()
   
-among_site_vcv <- readRDS("Outputs/site_cv.rds")
+among_site_vcv <- readRDS("Outputs/site_vcv.rds")
 
 studies <- as.character(unique(PREDICTS_site$SS))
 
@@ -177,7 +131,7 @@ for(i in 1:length(studies)){
   first_site <- c(first_site, first)
 }
 
-first_sites <- among_site_vcv_1[first_site,first_site]
+first_sites <- among_site_vcv[first_site,first_site]
 
 ### performing a clustering algorithm based on the distances between sites 
 
@@ -198,7 +152,7 @@ plot(site_dendro)
 #### First calculate study level phylogenetic similarity 
 
 
-Study_sim <- create_vcv(PREDICTS_abundance, level = "SS")
+Study_sim <- create_vcv(PREDICTS_abundance, level = "SS", tree = all_bird_tree)
 
 ### Next run a model without accounting for phylogenetic signal of sites and extract the random slopes of response to land use across studies
 
