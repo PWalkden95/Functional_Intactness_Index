@@ -10,13 +10,13 @@ require(TPD)
 require(geosphere)
 require(doParallel)
 require(foreach)
-
+require(ks)
 #### Load in the relevant datasets that will be collated to get all relevant information for FII calculations
 
 
 Jetz_Traits <- read.csv("../Datasets/GBD/GBD_BiometricsRaw_combined_2020_Dec_07.csv")
 PREDICTS_Aves_Am <- readRDS("../Datasets/PREDICTS/PREDICTS_Americas_Aves.rds")
-
+full_morpho_traits <- readRDS("Outputs/FullMorphTraits.rds")
 
 colnames(Jetz_Traits)[6] <- "Jetz_Name"
 
@@ -166,16 +166,16 @@ species <- data.frame(Jetz_Name = unique(c(site1_spp$Jetz_Name,site2_spp$Jetz_Na
 
 
 
-trait_ranges <- list(c(min(Full_PC_Scores[,2]) -(0.1 * min(Full_PC_Scores[,2])),max(Full_PC_Scores[,2]) + (0.1 * max(Full_PC_Scores[,2]))),
-                     c(min(Full_PC_Scores[,3]) -(0.1 * min(Full_PC_Scores[,3])),max(Full_PC_Scores[,3]) + (0.1 * max(Full_PC_Scores[,3]))),
-                     c(min(Full_PC_Scores[,4]) -(0.1 * min(Full_PC_Scores[,4])),max(Full_PC_Scores[,4]) + (0.1 * max(Full_PC_Scores[,4]))))
+trait_ranges <- list(c(min(full_morpho_traits[,2]) -(0.1 * min(full_morpho_traits[,2])),max(full_morpho_traits[,2]) + (0.1 * max(full_morpho_traits[,2]))),
+                     c(min(full_morpho_traits[,3]) -(0.1 * min(full_morpho_traits[,3])),max(full_morpho_traits[,3]) + (0.1 * max(full_morpho_traits[,3]))),
+                     c(min(full_morpho_traits[,4]) -(0.1 * min(full_morpho_traits[,4])),max(full_morpho_traits[,4]) + (0.1 * max(full_morpho_traits[,4]))))
 
 
 mean_TPD <- c()
 
 if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
   under_spp <- species %>% filter(Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))
-  under_spp_traits <- under_spp %>% dplyr::left_join(Full_PC_Scores, by = "Jetz_Name")
+  under_spp_traits <- under_spp %>% dplyr::left_join(full_morpho_traits, by = "Jetz_Name")
 
   spp <- unique(under_spp_traits$Jetz_Name)
   k <- spp[2]
@@ -187,9 +187,9 @@ if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
   spp_data <- under_spp_traits %>% filter(Jetz_Name == k)
     if(nrow(spp_data) == 1){
       spp_mean <- spp_data
-      spp_sd <- cbind(spp_sd, Foraging.PCA =  c(0.5*sd(Full_PC_Scores[,2])),
-                      Loco.PCA =  c(0.5*sd(Full_PC_Scores[,3])),
-                      Body.PCA =  c(0.5*sd(Full_PC_Scores[,3])))
+      spp_sd <- cbind(spp_sd, Foraging.PCA =  c(0.5*sd(full_morpho_traits[,2])),
+                      Loco.PCA =  c(0.5*sd(full_morpho_traits[,3])),
+                      Body.PCA =  c(0.5*sd(full_morpho_traits[,3])))
     } else{
 
   for(j in 2:ncol(under_spp_traits)){
@@ -210,7 +210,7 @@ if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
 }
 
 
-Traits <- species %>% dplyr::left_join(Full_PC_Scores, by = "Jetz_Name") %>% filter(Jetz_Name %in% Jetz_Traits_Am)
+Traits <- species %>% dplyr::left_join(full_morpho_traits, by = "Jetz_Name") %>% filter(Jetz_Name %in% Jetz_Traits_Am)
 
 species$Jetz_Name[which(!(species$Jetz_Name %in% unique(names(Trait_density$TPDs))))]
 Trait_density <- TPDs(Traits[,1], Traits[,c(2:4)], trait_ranges = trait_ranges, n_divisions = 61, alpha = 0.95)
@@ -240,7 +240,6 @@ Overlap <- TPDc(Trait_density, t(Community))
 
 
 TPDOverlap <- dissim(Overlap)
-
 
 
 
