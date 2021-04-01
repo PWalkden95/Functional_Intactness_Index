@@ -30,8 +30,16 @@ Jetz_Traits <- Jetz_Traits %>% dplyr::filter(Jetz_Name %in% Jetz_Species$Jetz_Na
                 Wing_Chord,Secondary1,Tail_Length,Tarsus_Length) %>% na.omit() %>% group_by(Jetz_Name) %>%
   dplyr::mutate(num = n()) %>% ungroup()
 
+miss_spp <- Jetz_Species$Jetz_Name[which(!(Jetz_Species$Jetz_Name %in% unique(Jetz_Traits$Jetz_Name)))]
 
+mean_Jetz_traits <-PREDICTS_Aves_Am %>% filter(Jetz_Name %in% miss_spp) %>%
+  dplyr::select(Jetz_Name,Bill.TotalCulmen,Bill.Depth,Bill.Nares,Bill.Width,
+  Wing.Chord,Secondary1,Tail.Length,Tarsus.Length) %>% dplyr::distinct() %>% group_by(Jetz_Name) %>%
+  dplyr::mutate(num = n()) %>% ungroup()
 
+colnames(mean_Jetz_traits) <- sub(x = colnames(mean_Jetz_traits), pattern = "\\.", replacement = "_")
+
+Jetz_Traits <- rbind(Jetz_Traits,mean_Jetz_traits)
 
 
 
