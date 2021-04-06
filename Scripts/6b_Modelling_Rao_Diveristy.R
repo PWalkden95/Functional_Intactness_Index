@@ -44,15 +44,21 @@ PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse_Intensity = ifelse(grep
                                           LandUse_Intensity = ifelse(grepl(LandUse_Intensity, pattern = "Plantation forest_Light use"),
                                                                      "Secondary Vegetation_Intense use",
                                                                       paste(LandUse_Intensity)),
+                                          LandUse_Intensity = ifelse(grepl(LandUse_Intensity, pattern = "Urban"),
+                                                                     "Urban",
+                                                                     paste(LandUse_Intensity)),
+                                          LandUse_Intensity = ifelse(grepl(LandUse_Intensity, pattern = "Cropland"),
+                                                                     "Cropland",
+                                                                     paste(LandUse_Intensity)),
                                           LandUse_Intensity = relevel(factor(LandUse_Intensity), 
                                                                       ref = "Primary_Minimal use"))
 
 table(PREDICTS_site$LandUse_Intensity)
-
+levels(PREDICTS_site$LUI)
 ########## Going to rename for some ease of outputs
 PREDICTS_site <- PREDICTS_site %>% dplyr::rename(LUI = LandUse_Intensity)
-levels(PREDICTS_site$LUI) <- c("PriMin", "CrpLig", "CrpMin", "PasIn", "PasLig", 
-                               "PasMin","PriIn","PriLig","SecIn","SecLig","SecMin","UrbLig","UrbMin")
+levels(PREDICTS_site$LUI) <- c("PriMin", "Cropland", "PasIn", "PasLig", 
+                               "PasMin","PriIn","PriLig","SecIn","SecLig","SecMin","Urban")
 
 PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse = ifelse(LUI == "PriMin", "PriMin", paste(LandUse)),
                                                  LandUse = ifelse(LandUse == "Plantation forest", "Secondary Vegetation", paste(LandUse)),
@@ -79,7 +85,7 @@ corvif(PREDICTS_site[,c( "LUI", "logHPD", "RD1k","RD50k" ,"UN_subregion")])
 corvif(PREDICTS_site[,c( "LUI", "logHPD",  "RD1k","RD50k")])
 
 
-#### Road densitity at 50 km radius is colinear witht the other variables and is dropped 
+ 
 
 
 
@@ -168,7 +174,7 @@ Random_DIC <- data.frame(mod1 = Rao_Model_1b$DIC, mod2 = Rao_Model_2b$DIC,mod3 =
                          mod4 = Rao_Model_4b$DIC, mod5 = Rao_Model_5b$DIC)
 
 
-#### the DIC and AIC are both lowest with the rabndom effect structure of random slope of logHPD within study (MODEL 3)
+
 
 ### Model 3 gives the best result which has logHPD as a random slope within study 
 ## so now to test the best fixed effect structure
@@ -377,3 +383,33 @@ Robust_mod
 utils::sessionInfo()
 
 ### Functional diversity is significantly lower in Cropland vs Primary minimal habitat
+
+phyr::fixef(Rao_Model_14b)
+
+
+#---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
+
+#-----------------------------------------------------------
+#----------------------------------------------------------
+
+
+new_data <- phyr::fixef(Rao_Model_14b) 
+new_data <- new_data[-(12:15),]
+
+intercept <- new_data$Value[1]
+
+alpha2 <- new_data %>% mutate(pred = Value + intercept)
+alpha2$pred[1] <- alpha2$pred[1] - alpha2$Value[1] 
+
+
+
+rownames(alpha2) <- c("PriMin", "Cropland", "PasIn", "PasLig", "PasMin", "PriIn", "PriLig","SecIn","SecLig","SecMin","Urban")
+
+alpha2 <- alpha2 %>% dplyr::mutate(landuse = c("PRM","CRP","PAI","PAL","PAM","PRI","PRL","SEI","SEL","SEM","URB"),
+                                   intensity = c("Minimal","All","Intense","Light","Minimal","Intense","Light","Intense","Light", "Minimal", "All"),
+                                   type = c("primary","crop","pasture","pasture","pasture","primary","primary","secondary","secondary","secondary","urban"),
+                                   Gow.Rao = pred)
+
+
+
