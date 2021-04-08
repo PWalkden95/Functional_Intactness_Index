@@ -73,7 +73,7 @@ write_rds(Similarity_data, file = "Outputs/tpd_similarity_data.rds")
 
 
 
-studies
+
 
 
 
@@ -258,14 +258,13 @@ registerDoSEQ()
 
 study_data$TPD_Overlap <- SS_data$TPD_Overlap
 
-  }
+  
 
 TPD_data <- rbind(TPD_data,study_data)
 
 }
+}
 
-
-test <- TPD_data %>% group_by(SS) %>% count()
 
 
  write_rds(file = "Outputs/tpd_overlap_data.rds", TPD_data)

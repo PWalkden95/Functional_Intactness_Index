@@ -47,7 +47,7 @@ TPD_data <- TPD_data %>% dplyr::mutate(Cont = ifelse(grepl(Contrast, pattern = "
 
 levels(TPD_data$Cont) <- c("PriMin-PriMin","PriMin-SecMin", "PriMin-UrbMin","PriMin-Cropland", "PriMin-Primary","PriMin-SecLig")
 table(TPD_data$Cont)
-TPD_data <- TPD_data[-118,]
+TPD_data <- TPD_data[-118,] %>% droplevels()
 
 TPD_data$rt3env <- scale(TPD_data$rt3env)
 TPD_data$s2logHPD <- scale(TPD_data$S2logHPD)
@@ -369,5 +369,18 @@ Model_simp7 <- rbind(mod_sim1,mod_sim2)
 
 
 summary(Model_12)
+
+
+
+
+inv_logit <- function(f, a){
+  a <- (1-2*a)
+  (a*(1+exp(f))+(exp(f)-1))/(2*a*(1+exp(f)))
+}
+
+newdata_cd <- data.frame(Cont = levels(TPD_data$Cont),
+                         logdist = 0, rt3env = 0, sqrtS2RD1K = 0, RD1Kdiff = 0, CNTRLlogHPD = 0) %>%
+  mutate(cd_m_preds = predict(Model_12, ., re.form = NA) %>%
+           inv_logit(a = 0.001))
 
 
