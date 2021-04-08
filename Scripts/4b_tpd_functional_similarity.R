@@ -56,7 +56,7 @@ Similarity_data <- data.frame(PREDICTS_Aves_Am) %>%
   ### calculating a hypervolume in 3 dimensions with fewer than 21 species on result in inaccurcies 
   group_by(SSBS) %>% dplyr::mutate(Site_spp = n_distinct(Jetz_Name),TotalSiteAbundance = sum(SpeciesSiteAbundance)) %>%
   
-  filter(Site_spp > 1) %>% ungroup() %>%
+  filter(Site_spp > 22) %>% ungroup() %>%
   
   group_by(SS) %>% dplyr::mutate(n_primary_min = sum(LandUse_Intensity == "Primary_Minimal use" ), n_sites_within_studies = n_distinct(SSBS)) %>% ungroup() %>%
   
@@ -73,18 +73,17 @@ write_rds(Similarity_data, file = "Outputs/tpd_similarity_data.rds")
 
 
 
+studies
 
-registerDoParallel(cores = 5)
 
 
 studies <- levels(Similarity_data$SS)
 
+TPD_data <- c()
 
-TPD_data <- foreach(study = studies,
-                        .combine = "rbind",
-                        .packages = c("geosphere","tidyverse","TPD", "magrittr"),
-                        .inorder = FALSE) %dopar% {
-
+for(study in studies){
+                        
+print(paste(study))
 
 
 data <- Similarity_data %>% filter(SS == study) %>% droplevels()
@@ -147,7 +146,11 @@ study_data$SS <- study
 study_data$TPD_Overlap <- NA
 
 
-for(i in 1:nrow(site_comparisons)){
+registerDoParallel(cores = 10)
+
+SS_data <- foreach(i = 1:nrow(site_comparisons),
+                   .combine = "rbind",
+                   .packages = c("geosphere","tidyverse","TPD", "magrittr")) %dopar% {
 
 
   ##### get the species in both sites being compared
@@ -212,7 +215,7 @@ if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
 
 Traits <- species %>% dplyr::left_join(full_morpho_traits, by = "Jetz_Name") %>% filter(Jetz_Name %in% Jetz_Traits_Am)
 
-species$Jetz_Name[which(!(species$Jetz_Name %in% unique(names(Trait_density$TPDs))))]
+
 Trait_density <- TPDs(Traits[,1], Traits[,c(2:4)], trait_ranges = trait_ranges, n_divisions = 61, alpha = 0.95)
 
 if(!is.null(mean_TPD)){
@@ -243,20 +246,26 @@ TPDOverlap <- dissim(Overlap)
 
 
 
-study_data[i, "TPD_Overlap"] <- 1 - TPDOverlap$communities$dissimilarity[2]
 
+data <- data.frame(TPD_Overlap = 1 - TPDOverlap$communities$dissimilarity[2])
 
-}
+data
 
-
-
-study_data <- study_data
-
-}
-}
+                   }
 
 registerDoSEQ()
 
 
+study_data$TPD_Overlap <- SS_data$TPD_Overlap
 
-write_rds(file = "Outputs/tpd_overlap_data.rds", TPD_data)
+  }
+
+TPD_data <- rbind(TPD_data,study_data)
+
+}
+
+
+test <- TPD_data %>% group_by(SS) %>% count()
+
+
+ write_rds(file = "Outputs/tpd_overlap_data.rds", TPD_data)
