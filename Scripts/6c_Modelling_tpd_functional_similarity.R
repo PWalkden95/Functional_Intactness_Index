@@ -384,3 +384,11 @@ newdata_cd <- data.frame(Cont = levels(TPD_data$Cont),
            inv_logit(a = 0.001))
 
 
+alpha2 <- newdata_cd %>% dplyr::mutate(intensity = c("Minimal", "Minimal","All","All","Light"),
+                                       type = c("primary", "secondary","cropland","primary","secondary"),
+                                       Similarity = cd_m_preds,
+                                       std.error = c(0.22290,0.10726,0.19044,0.1115,0.13550))
+
+
+summary(Model_12)
+

@@ -54,7 +54,7 @@ PREDICTS_site <- PREDICTS_site %>% dplyr::mutate(LandUse_Intensity = ifelse(grep
                                                                       ref = "Primary_Minimal use"))
 
 table(PREDICTS_site$LandUse_Intensity)
-levels(PREDICTS_site$LUI)
+
 ########## Going to rename for some ease of outputs
 PREDICTS_site <- PREDICTS_site %>% dplyr::rename(LUI = LandUse_Intensity)
 levels(PREDICTS_site$LUI) <- c("PriMin", "Cropland", "PasIn", "PasLig", 
