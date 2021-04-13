@@ -28,7 +28,7 @@ road_densities <- c()
 
 registerDoParallel(cores =10)
 
-
+memory.limit(1200000)
 road_densities <- foreach(site = sites,
                           .combine = "rbind",
                           .packages = c("tidyverse", "sf", "rgeos", "lwgeom")) %dopar%{
@@ -80,5 +80,6 @@ road_densities <- foreach(site = sites,
                           }
 
 registerDoSEQ()
+closeAllConnections()
 
 write_rds(file = "../Datasets/PREDICTS_variables/ave_site_road_densities.rds", road_densities)
