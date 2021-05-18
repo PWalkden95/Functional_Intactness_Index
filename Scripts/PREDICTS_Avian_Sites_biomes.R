@@ -4,7 +4,7 @@ require(tidyverse)
 require(sf)
 
 
-World_biomes <- sf::read_sf("../Datasets/WWF_Terrestrial_Biomes/official/wwf_terr_ecos.shp")
+World_biomes <- sf::read_sf("../../Datasets/WWF_Terrestrial_Biomes/official/wwf_terr_ecos.shp")
 World_biomes$BIOME <- factor(World_biomes$BIOME)
 
 wm<-map_data("world")
@@ -16,12 +16,9 @@ levels(World_biomes$BIOME) <- c("Tropical & Subtropical Moist Broadleaf Forests"
                                 "Deserts & Xeric Shrublands","Mangroves","Lakes","Rock & Ice")
 
 
-colours <- c("darkolivegreen4","darkseagreen","lightgreen","darkolivegreen1","turquoise","darkslategray4","palegoldenrod","lightyellow1","powderblue",
-             "cadetblue1","darkslategray3","salmon","khaki1","tomato1","steelblue4","white")
+colours <- c("darkolivegreen4","darkseagreen","lightgreen","darkolivegreen1","turquoise","darkslategray4","darkseagreen2","khaki1","powderblue",
+             "cadetblue1","darkslategray3","salmon","lightyellow1","tomato1","steelblue4","white")
 
-
-
-biome_list <- rep(list(NA),length(levels(World_biomes$BIOME)))
 i <- 1
 
 for(biome in levels(World_biomes$BIOME)){
@@ -52,15 +49,14 @@ boundry_plot<-ggplot()+ coord_fixed()+
 
 for(i in 1:length(biome_list)){
   boundry_plot <- boundry_plot +
-    geom_sf(data = biome_list[[i]], fill = colours[i], colour = colours[i], alpha = 0.8)
+    geom_sf(data = biome_list[[i]], fill = colours[i], colour = colours[i])
     
 }
-
 
 plot(boundry_plot)
 
 
-PREDICTS <- readRDS("../Datasets/PREDICTS/diversity-2021-02-24-03-32-59.rds") 
+PREDICTS <- readRDS("../../Datasets/PREDICTS/diversity-2021-02-24-03-32-59.rds") 
   
   
 PREDICTS_Aves <- PREDICTS %>% filter(Rank == "Species", Class == "Aves", Measurement > 0) %>% group_by(SSBS) %>% mutate(num_spp = n()) %>% ungroup() 
@@ -73,8 +69,11 @@ PREDICTS_Species <- PREDICTS_Aves %>% dplyr::distinct(Country)
 
 
 boundry_plot <- boundry_plot +
-geom_point(data = fortify(PREDICTS_Aves), aes(Longitude, Latitude),
-           colour = "black", size = log10(PREDICTS_Aves$num_spp)*5, alpha = I(.1))
+geom_point(data = fortify(PREDICTS_Sites), aes(Longitude, Latitude),
+           colour = "black", size = log10(PREDICTS_Sites$num_spp)*5, alpha = I(.1))
 
-ggsave(filename = "../test.png",boundry_plot,device = "png", height = 10, width = 20,dpi=300)
+
+plot(boundry_plot)
+
+ggsave(filename = "../../test.png",boundry_plot,device = "png", height = 10, width = 20,dpi=300)
 
