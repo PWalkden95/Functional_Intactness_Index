@@ -4,7 +4,7 @@ require(SYNCSA)
 
 
 
-Rao_Q_Func <- function(data, traits){
+Rao_Q_Func_bias <- function(data, traits){
   
   ### get the list of uncique species across teh whole dataset
   
@@ -40,13 +40,16 @@ Rao_Q_Func <- function(data, traits){
   
   
   
-  Rao_Bias <- rao.diversity(comm = t(Species_abundance),traits =  spp_traits)    #THIS is using the package SYNCSA that calcuates Rao's using gowdis 
-  
+  Rao_Bias <- rao.diversity(comm = t(Species_abundance),traits =  spp_traits)#THIS is using the package SYNCSA that calcuates Rao's using gowdis 
+
+  return(Rao_Bias)
+  }
   ######################################################################
   ########## Here we are also going to calculate an "unbiased" Raos Q###
   ######################################################################
   
-  
+Rao_Q_Func_unbias <- function(data,traits){  
+
   Species_abundance_2 <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
   
   ### loop over every site in the dataset to collate the relative abundance of each species
@@ -74,6 +77,13 @@ Rao_Q_Func <- function(data, traits){
   
   comm <- t(Species_abundance_2)
   
+  #### species traits 
+  
+  spp_traits <- traits %>% filter(Jetz_Name %in% rownames(Species_abundance_2))
+  rownames(spp_traits) <- spp_traits$Jetz_Name
+  spp_traits <- spp_traits[,-1]
+  
+  
   ##Load in altered SYNCSA function to calculate Rao's Q unbias 
   source("Functions/Rao_Diversity_2.R")
   
@@ -82,10 +92,9 @@ Rao_Q_Func <- function(data, traits){
   Rao_Unbias <- Rao_Unbias$FunRao
   
   
-  Rao <- data.frame(Bias = as.numeric(Rao_Bias$FunRao),
-                    Unbias = Rao_Unbias)
   
   
   
-  return(Rao)
+  
+  return(Rao_Unbias)
 }
