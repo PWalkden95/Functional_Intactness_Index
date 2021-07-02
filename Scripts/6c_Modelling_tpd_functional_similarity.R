@@ -161,50 +161,11 @@ for(i in 1:1000){
   
 }
 
-#### function to generate the LR distribution across the 1000 datasets
+## load in function that simplifies models through randomisations
 
-##### Liklihood ratio function
+source("Functions/Permuted_model_simplification.R")
 
-Permuted_model_simplification <- function(data, model1, remove){
-  
-  formula <- as.formula(paste("~.-",remove,sep = ""))
-  model2 <- update(model1,formula)
-  
-  LRT_dist <- c()
-  
-  for(i in 1:length(data)){
-    
-    mod1 <- lmer(model1@call, data = data[[i]], REML = FALSE)
-    mod2 <- lmer(model2@call, data = data[[i]], REML = FALSE)
-    
-    LRT <- anova(mod1,mod2)
-    LRT <- LRT[which(!is.na(LRT$Chisq)),"Chisq"]
-    
-    LRT_dist <- rbind(LRT_dist,LRT)
-    
-  }
-  
-  mod_LRT <- anova(model1, model2)
-  ChiSq <- mod_LRT[2,"Chisq"]
-  
-  dist_quant <- quantile(LRT_dist, 0.95)
-  
-  DROP <- ChiSq < dist_quant
-  
-  percentile <- 0.01
-  test <- TRUE
-  while(test & percentile < 1.01){
-    dq <- quantile(LRT_dist, percentile)
-    test <- ChiSq > dq
-    percentile <- percentile + 0.01
-  }
-perecentile <- percentile - 0.01
-  
-res <- data.frame(DROP = DROP, Percentile = perecentile)
-rownames(res) <- paste(remove)
 
-return(res)
-}
 ### so lets look at our best maximal model
 
 Anova(Model_1, type = "II")
@@ -213,7 +174,7 @@ Anova(Model_1, type = "II")
 
 ###### int Cont:RD50Kdiff
 
-mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = "Cont:RD50Kdiff")
+mod_sim1 <- Permuted_model_simplification(Permuted_data,model1 = Model_1, remove = c("Cont:RD50Kdiff","Cont:RD1Kdiff"))
 
 ###### int Cont:RD1Kdiff
 
