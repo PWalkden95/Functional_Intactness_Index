@@ -10,8 +10,9 @@ require(robustlmm)
 
 ## Load in the datasets
 
-PREDICTS_site <- readRDS("Outputs/PREDICTS_Site_Rao.rds")
+PREDICTS_site <- readRDS("../Functional_Intactness_Index/Outputs/PREDICTS_Site_Rao.rds")
 PREDICTS_abundance <- readRDS("Outputs/Rao_abundance_data.rds")
+
 
 
 hist(PREDICTS_site$Bias_Rao, breaks = 20)

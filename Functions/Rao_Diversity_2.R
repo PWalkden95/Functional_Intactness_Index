@@ -81,8 +81,7 @@ rao_diversity_2 <- function (comm, traits = NULL, phylodist = NULL, checkdata = 
         weights[put.together[[k]]] <- 1/length(put.together[[k]])
       }
     }
-    dist.functional <- sqrt(as.matrix(FD::gowdis(x = traits, 
-                                                 asym.bin = NULL, ord = ord, w = weights, ...)))
+    dist.functional <- sqrt(as.matrix(gawdis(x = traits)))
     if (checkdata) {
       if (any(is.na(dist.functional))) {
         warning("Warning: NA in distance between species", 

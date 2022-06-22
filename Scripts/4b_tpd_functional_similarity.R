@@ -181,7 +181,7 @@ if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
   under_spp_traits <- under_spp %>% dplyr::left_join(full_morpho_traits, by = "Jetz_Name")
 
   spp <- unique(under_spp_traits$Jetz_Name)
-  k <- spp[2]
+  
   means <- c()
   sd <- c()
   for(k in spp){
@@ -192,7 +192,7 @@ if(any(species$Jetz_Name %in% c(single_Jetz_traits, Jetz_Traits_under))){
       spp_mean <- spp_data
       spp_sd <- cbind(spp_sd, Foraging.PCA =  c(0.5*sd(full_morpho_traits[,2])),
                       Loco.PCA =  c(0.5*sd(full_morpho_traits[,3])),
-                      Body.PCA =  c(0.5*sd(full_morpho_traits[,3])))
+                      Body.PCA =  c(0.5*sd(full_morpho_traits[,4])))
     } else{
 
   for(j in 2:ncol(under_spp_traits)){
@@ -219,7 +219,7 @@ Traits <- species %>% dplyr::left_join(full_morpho_traits, by = "Jetz_Name") %>%
 Trait_density <- TPDs(Traits[,1], Traits[,c(2:4)], trait_ranges = trait_ranges, n_divisions = 61, alpha = 0.95)
 
 if(!is.null(mean_TPD)){
-  Trait_density$TPDs <- c(mean_TPD$TPDs, Trait_density$TPDs)
+  Trait_density$TPDs <- c(Trait_density$TPDs,mean_TPD$TPDs)
   Trait_density$data$species <- c(Trait_density$data$species, under_spp_traits$Jetz_Name)
   Trait_density$data$traits <- rbind(Trait_density$data$traits, under_spp_traits[,c(2:4)])
 }

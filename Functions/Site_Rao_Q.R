@@ -8,7 +8,7 @@ Rao_Q_Func_bias <- function(data, traits){
   
   ### get the list of uncique species across teh whole dataset
   
-  Species_abundance <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
+  Species_abundance <- data.frame(data) %>% dplyr::distinct(Birdlife_Name) %>% droplevels()
   
   ### loop over every site in the dataset to collate the relative abundance of each species
   
@@ -19,13 +19,13 @@ Rao_Q_Func_bias <- function(data, traits){
     
     ### Join species withining site to dataframe and rename column as site name
     
-    Species_abundance <- Species_abundance %>% left_join(Spp_abd[,c("Jetz_Name", "RelativeAbundance")], by = "Jetz_Name")
+    Species_abundance <- Species_abundance %>% left_join(Spp_abd[,c("Birdlife_Name", "RelativeAbundance")], by = "Birdlife_Name")
     colnames(Species_abundance)[which(colnames(Species_abundance) == "RelativeAbundance")] <- paste(site)
   }
   
   ## rename rows as species and drop column from dataset 
   
-  rownames(Species_abundance) <- Species_abundance$Jetz_Name
+  rownames(Species_abundance) <- Species_abundance$Birdlife_Name
   Species_abundance <- as.matrix(Species_abundance[,-1])
   
   ## Nas to zeros
@@ -34,23 +34,24 @@ Rao_Q_Func_bias <- function(data, traits){
   
   ### Join all species in datasets traits scores
   
-  spp_traits <- traits %>% filter(Jetz_Name %in% rownames(Species_abundance))
-  rownames(spp_traits) <- spp_traits$Jetz_Name
-  spp_traits <- spp_traits[,-1]
+  spp_traits <- traits %>% filter(Birdlife_Name %in% rownames(Species_abundance))
+  rownames(spp_traits) <- spp_traits$Birdlife_Name
+  spp_traits <- spp_traits[,-1] %>% as.matrix()
+
   
+  source("C:/Users/patri/OneDrive - Imperial College London/Work/Biology/(2020-_Natural_History_Museum/PhD_Code/PREDICTS_Assembly/Functions/rao_diversity_gaw.R")
   
-  
-  Rao_Bias <- rao.diversity(comm = t(Species_abundance),traits =  spp_traits)#THIS is using the package SYNCSA that calcuates Rao's using gowdis 
+  Rao_Bias <- rao_diversity_gaw(comm = t(Species_abundance),traits =  spp_traits)#THIS is using the package SYNCSA that calcuates Rao's using gowdis 
 
   return(Rao_Bias)
   }
   ######################################################################
   ########## Here we are also going to calculate an "unbiased" Raos Q###
   ######################################################################
-  
+
 Rao_Q_Func_unbias <- function(data,traits){  
 
-  Species_abundance_2 <- data.frame(data) %>% dplyr::distinct(Jetz_Name) %>% droplevels()
+  Species_abundance_2 <- data.frame(data) %>% dplyr::distinct(Birdlife_Name) %>% droplevels()
   
   ### loop over every site in the dataset to collate the relative abundance of each species
   
@@ -61,13 +62,13 @@ Rao_Q_Func_unbias <- function(data,traits){
     
     ### Join species withining site to dataframe and rename column as site name
     
-    Species_abundance_2 <- Species_abundance_2 %>% left_join(Spp_abd[,c("Jetz_Name", "SpeciesSiteAbundance")], by = "Jetz_Name")
+    Species_abundance_2 <- Species_abundance_2 %>% left_join(Spp_abd[,c("Birdlife_Name", "SpeciesSiteAbundance")], by = "Birdlife_Name")
     colnames(Species_abundance_2)[which(colnames(Species_abundance_2) == "SpeciesSiteAbundance")] <- paste(site)
   }
   
   ## rename rows as species and drop column from dataset 
   
-  rownames(Species_abundance_2) <- Species_abundance_2$Jetz_Name
+  rownames(Species_abundance_2) <- Species_abundance_2$Birdlife_Name
   Species_abundance_2 <- as.matrix(Species_abundance_2[,-1])
   
   ## Nas to zeros
@@ -79,22 +80,17 @@ Rao_Q_Func_unbias <- function(data,traits){
   
   #### species traits 
   
-  spp_traits <- traits %>% filter(Jetz_Name %in% rownames(Species_abundance_2))
-  rownames(spp_traits) <- spp_traits$Jetz_Name
+  spp_traits <- traits %>% filter(Birdlife_Name %in% rownames(Species_abundance_2))
+  rownames(spp_traits) <- spp_traits$Birdlife_Name
   spp_traits <- spp_traits[,-1]
   
   
   ##Load in altered SYNCSA function to calculate Rao's Q unbias 
-  source("Functions/Rao_Diversity_2.R")
+  source("../Functional_Intactness_Index/Functions/Rao_Diversity_2.R")
   
   
   Rao_Unbias <- rao_diversity_2(comm = comm, traits = spp_traits)
-  Rao_Unbias <- Rao_Unbias$FunRao
-  
-  
-  
-  
-  
-  
+
+
   return(Rao_Unbias)
 }
